@@ -342,7 +342,6 @@ async function loadUserPage(slug) {
   if (page.owner) {
     $("page-title").textContent = page.display_name
       ? `${page.display_name}'s card` : "Your card";
-    $("page-sub").textContent = "";
     $("open-settings").hidden = false;
     $("default-public").checked = page.default_public;
     $("profile-fields").disabled = !page.default_public;
@@ -372,7 +371,6 @@ function initUser() {
 
   loadUserPage(slug).catch((err) => {
     $("page-title").textContent = "Page not found";
-    $("page-sub").textContent = "This link doesn't lead to a card. Check the URL.";
     $("recommend-form").hidden = true;
     showError(err);
   });
