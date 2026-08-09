@@ -14,6 +14,7 @@ use crate::isbn;
 use crate::state::AppState;
 
 const MAX_INPUT_LEN: usize = 256;
+const MAX_NOTE_LEN: usize = 500;
 
 /// Plaintext content of a sealed private recommendation.
 #[derive(Serialize, Deserialize)]
@@ -31,6 +32,8 @@ pub struct RecommendationView {
     pub read: bool,
     pub recommendation_count: i64,
     pub timestamp: String,
+    /// Submitter notes ("I liked this because…"), one per voter who left one.
+    pub notes: Vec<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -68,10 +71,40 @@ pub async fn load_recommendations(
         .fetch_all(pool)
         .await?;
 
+    let notes = sqlx::query_as::<_, (i64, Option<String>, Option<Vec<u8>>)>(
+        "SELECT recommendation_id, note, enc_note FROM recommendation_votes
+         WHERE (note IS NOT NULL OR enc_note IS NOT NULL)
+           AND recommendation_id IN
+               (SELECT id FROM recommendations WHERE coalesce(user_id, 0) = ?)
+         ORDER BY rowid",
+    )
+    .bind(user_id.unwrap_or(0))
+    .fetch_all(pool)
+    .await?;
+
+    let mut notes_by_rec: std::collections::HashMap<i64, Vec<String>> =
+        std::collections::HashMap::new();
+    for (rec_id, note, enc_note) in notes {
+        let text = match (note, enc_note) {
+            (Some(text), _) => Some(text),
+            (None, Some(sealed)) => private_key
+                .and_then(|key| crypto::unseal(key, &sealed))
+                .and_then(|bytes| String::from_utf8(bytes).ok()),
+            _ => None,
+        };
+        if let Some(text) = text {
+            notes_by_rec.entry(rec_id).or_default().push(text);
+        }
+    }
+
     let mut views = Vec::with_capacity(rows.len());
     for row in rows {
+        let rec_id = row.id;
         match row_to_view(row, private_key) {
-            Some(view) => views.push(view),
+            Some(mut view) => {
+                view.notes = notes_by_rec.remove(&rec_id).unwrap_or_default();
+                views.push(view);
+            }
             None => tracing::warn!("skipping undecryptable recommendation row"),
         }
     }
@@ -96,6 +129,7 @@ fn row_to_view(row: RecRow, private_key: Option<&SecretKey>) -> Option<Recommend
         read: row.read,
         recommendation_count: row.recommendation_count,
         timestamp: row.timestamp,
+        notes: Vec::new(),
     })
 }
 
@@ -127,6 +161,8 @@ pub async fn get_global(
 #[derive(Deserialize)]
 pub struct SubmitBody {
     pub book_name: String,
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 pub async fn submit_to_page(
@@ -186,6 +222,14 @@ async fn submit(
     let mut title = resolved.title;
     title.truncate(title.chars().take(MAX_INPUT_LEN).map(char::len_utf8).sum());
 
+    let note = match body.note.as_deref().map(str::trim) {
+        Some(text) if text.chars().count() > MAX_NOTE_LEN => {
+            return Err(AppError::BadRequest("note is too long (max 500 characters)".into()))
+        }
+        Some(text) if !text.is_empty() => Some(text.to_string()),
+        _ => None,
+    };
+
     let (submitter, jar) = auth::submitter_hash(jar, state.config.secure_cookies);
     let user_id = target.as_ref().map(|u| u.id);
     let blind = crypto::blind_index(&state.config.pepper, user_id, &resolved.isbn13);
@@ -194,19 +238,23 @@ async fn submit(
     // unique-index race and is retried as an increment.
     for attempt in 0..2 {
         let mut tx = state.pool.begin().await?;
-        let existing: Option<(i64,)> =
-            sqlx::query_as("SELECT id FROM recommendations WHERE isbn_index = ?")
+        let existing: Option<(i64, bool)> =
+            sqlx::query_as("SELECT id, is_public FROM recommendations WHERE isbn_index = ?")
                 .bind(&blind)
                 .fetch_optional(&mut *tx)
                 .await?;
 
-        if let Some((rec_id,)) = existing {
+        if let Some((rec_id, rec_public)) = existing {
+            let (note_plain, note_sealed) = split_note(&note, rec_public, target.as_ref())?;
             let inserted = sqlx::query(
-                "INSERT OR IGNORE INTO recommendation_votes (recommendation_id, submitter_hash)
-                 VALUES (?, ?)",
+                "INSERT OR IGNORE INTO recommendation_votes
+                     (recommendation_id, submitter_hash, note, enc_note)
+                 VALUES (?, ?, ?, ?)",
             )
             .bind(rec_id)
             .bind(&submitter)
+            .bind(&note_plain)
+            .bind(&note_sealed)
             .execute(&mut *tx)
             .await?
             .rows_affected();
@@ -263,12 +311,16 @@ async fn submit(
         match result {
             Ok(done) => {
                 let rec_id = done.last_insert_rowid();
+                let (note_plain, note_sealed) = split_note(&note, is_public, target.as_ref())?;
                 sqlx::query(
-                    "INSERT INTO recommendation_votes (recommendation_id, submitter_hash)
-                     VALUES (?, ?)",
+                    "INSERT INTO recommendation_votes
+                         (recommendation_id, submitter_hash, note, enc_note)
+                     VALUES (?, ?, ?, ?)",
                 )
                 .bind(rec_id)
                 .bind(&submitter)
+                .bind(&note_plain)
+                .bind(&note_sealed)
                 .execute(&mut *tx)
                 .await?;
                 tx.commit().await?;
@@ -281,6 +333,25 @@ async fn submit(
         }
     }
     unreachable!("second attempt either increments or errors")
+}
+
+/// Route a submitter note to the right column: plaintext for public
+/// recommendations, sealed to the page key for private ones.
+fn split_note(
+    note: &Option<String>,
+    rec_public: bool,
+    target: Option<&User>,
+) -> Result<(Option<String>, Option<Vec<u8>>), AppError> {
+    match note {
+        None => Ok((None, None)),
+        Some(text) if rec_public => Ok((Some(text.clone()), None)),
+        Some(text) => {
+            let target = target.ok_or_else(|| {
+                AppError::Internal(anyhow::anyhow!("private recommendation without a page"))
+            })?;
+            Ok((None, Some(crypto::seal(&target.public_key, text.as_bytes())?)))
+        }
+    }
 }
 
 fn respond(
@@ -354,6 +425,27 @@ pub async fn patch_rec(
             .bind(rec_id)
             .execute(&state.pool)
             .await?;
+
+            // Reveal the submitter notes along with the book.
+            let votes: Vec<(i64, Vec<u8>)> = sqlx::query_as(
+                "SELECT rowid, enc_note FROM recommendation_votes
+                 WHERE recommendation_id = ? AND enc_note IS NOT NULL",
+            )
+            .bind(rec_id)
+            .fetch_all(&state.pool)
+            .await?;
+            for (rowid, enc_note) in votes {
+                let text = crypto::unseal(&private_key, &enc_note)
+                    .and_then(|bytes| String::from_utf8(bytes).ok())
+                    .ok_or_else(|| anyhow::anyhow!("sealed note failed to open"))?;
+                sqlx::query(
+                    "UPDATE recommendation_votes SET note = ?, enc_note = NULL WHERE rowid = ?",
+                )
+                .bind(&text)
+                .bind(rowid)
+                .execute(&state.pool)
+                .await?;
+            }
         } else if !make_public && row.is_public {
             // Hide: seal the plaintext to the page's public key.
             let payload = serde_json::to_vec(&SealedBook {
@@ -370,6 +462,25 @@ pub async fn patch_rec(
             .bind(rec_id)
             .execute(&state.pool)
             .await?;
+
+            // Seal the submitter notes along with the book.
+            let votes: Vec<(i64, String)> = sqlx::query_as(
+                "SELECT rowid, note FROM recommendation_votes
+                 WHERE recommendation_id = ? AND note IS NOT NULL",
+            )
+            .bind(rec_id)
+            .fetch_all(&state.pool)
+            .await?;
+            for (rowid, text) in votes {
+                let sealed_note = crypto::seal(&user.public_key, text.as_bytes())?;
+                sqlx::query(
+                    "UPDATE recommendation_votes SET note = NULL, enc_note = ? WHERE rowid = ?",
+                )
+                .bind(&sealed_note)
+                .bind(rowid)
+                .execute(&state.pool)
+                .await?;
+            }
         }
     }
 

@@ -57,6 +57,13 @@ function renderList(recommendations, { owner, secret, slug } = {}) {
     count.textContent = `× ${rec.recommendation_count}`;
     item.append(count);
 
+    for (const note of rec.notes || []) {
+      const quote = document.createElement("blockquote");
+      quote.className = "rec-note";
+      quote.textContent = note;
+      item.append(quote);
+    }
+
     if (owner) item.append(ownerControls(rec, secret, slug));
     list.append(item);
   }
@@ -137,6 +144,7 @@ function wireSubmitForm(submitUrl, reload) {
   function hideConfirm() {
     card.hidden = true;
     selected = null;
+    $("book-note").value = "";
   }
 
   function showConfirm(book) {
@@ -230,10 +238,11 @@ function wireSubmitForm(submitUrl, reload) {
 
   async function submitBook(bookName) {
     setStatus("Adding to the card…");
+    const note = $("book-note").value.trim();
     try {
       const result = await api(submitUrl, {
         method: "POST",
-        body: JSON.stringify({ book_name: bookName }),
+        body: JSON.stringify({ book_name: bookName, note: note || null }),
       });
       setStatus(STATUS_TEXT[result.status](result.book));
       input.value = "";
@@ -257,14 +266,13 @@ function wireSubmitForm(submitUrl, reload) {
     const query = input.value.trim();
     if (!query) return;
 
-    // An exact ISBN needs no disambiguation — submit it directly.
-    if (looksLikeIsbn(query)) return submitBook(query);
-
-    // Otherwise search and ask for confirmation of the top match.
+    // Search and ask for confirmation of the top match (with a note field).
     setStatus("Searching the catalogue…");
     try {
       const results = await api(`/api/search?q=${encodeURIComponent(query)}`);
       if (results.length === 0) {
+        // Exact ISBNs sometimes miss the search index; submit directly.
+        if (looksLikeIsbn(query)) return submitBook(query);
         setStatus("No matching book found — try the exact title or an ISBN.", true);
         return;
       }
@@ -342,6 +350,7 @@ async function loadUserPage(slug) {
   const headers = secret ? { Authorization: `Bearer ${secret}` } : {};
   const page = await api(`/api/pages/${encodeURIComponent(slug)}`, { headers });
 
+  $("unlock-panel").hidden = page.owner || Boolean(secret);
   if (page.owner) {
     $("page-title").textContent = page.display_name
       ? `${page.display_name}'s card` : "Your card";
@@ -380,6 +389,31 @@ function initUser() {
   $("copy-share").addEventListener("click", async () => {
     await navigator.clipboard.writeText(`${window.location.origin}/u/${slug}`);
     setStatus("Share link copied.");
+  });
+
+  $("unlock-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const key = $("unlock-key").value.trim();
+    if (!key) return;
+    try {
+      // Verify the key against the API before trusting it.
+      await api(`/api/pages/${encodeURIComponent(slug)}`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      localStorage.setItem(`abr_secret_${slug}`, key);
+      localStorage.setItem("abr_last_slug", slug);
+      window.location.reload();
+    } catch {
+      $("unlock-status").textContent = "That key doesn't open this card.";
+    }
+  });
+
+  $("logout").addEventListener("click", () => {
+    localStorage.removeItem(`abr_secret_${slug}`);
+    if (localStorage.getItem("abr_last_slug") === slug) {
+      localStorage.removeItem("abr_last_slug");
+    }
+    window.location.reload();
   });
 
   $("save-name").addEventListener("click", async () => {

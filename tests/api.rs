@@ -340,6 +340,62 @@ async fn global_board_visit_and_submit() {
 }
 
 #[tokio::test]
+async fn submitter_notes_follow_recommendation_visibility() {
+    let (app, pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    let submit_url = format!("/api/pages/{slug}/recommendations");
+    let page_url = format!("/api/pages/{slug}");
+
+    // Public rec: note is plaintext and publicly visible.
+    call(&app, "POST", &submit_url,
+        Some(json!({"book_name": "The Dispossessed", "note": "changed how I think"})),
+        None, None).await;
+    let public = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(public.body["recommendations"][0]["notes"], json!(["changed how I think"]));
+
+    // Second submitter's note joins the same row.
+    call(&app, "POST", &submit_url,
+        Some(json!({"book_name": "the dispossessed", "note": "an anarchist moon!"})),
+        None, None).await;
+    let public = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(public.body["recommendations"][0]["notes"],
+        json!(["changed how I think", "an anarchist moon!"]));
+
+    // Sealing the rec seals the notes too.
+    let rec_id = public.body["recommendations"][0]["id"].as_i64().unwrap();
+    call(&app, "PATCH", &format!("/api/recommendations/{rec_id}"),
+        Some(json!({"is_public": false})), Some(&secret), None).await;
+    let (plain, sealed): (i64, i64) = sqlx::query_as(
+        "SELECT count(note), count(enc_note) FROM recommendation_votes
+         WHERE recommendation_id = ?")
+        .bind(rec_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!((plain, sealed), (0, 2), "notes must be sealed with the rec");
+
+    // Owner still reads them; a new note to the sealed rec is sealed on arrival.
+    call(&app, "POST", &submit_url,
+        Some(json!({"book_name": "The Dispossessed", "note": "sealed note"})), None, None).await;
+    let owner = call(&app, "GET", &page_url, None, Some(&secret), None).await;
+    assert_eq!(owner.body["recommendations"][0]["notes"],
+        json!(["changed how I think", "an anarchist moon!", "sealed note"]));
+    let public = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(public.body["recommendations"].as_array().unwrap().len(), 0);
+
+    // Revealing brings all notes back to plaintext.
+    call(&app, "PATCH", &format!("/api/recommendations/{rec_id}"),
+        Some(json!({"is_public": true})), Some(&secret), None).await;
+    let public = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(public.body["recommendations"][0]["notes"].as_array().unwrap().len(), 3);
+
+    // Oversized note rejected.
+    let too_long = call(&app, "POST", &submit_url,
+        Some(json!({"book_name": "9780134685991", "note": "x".repeat(501)})), None, None).await;
+    assert_eq!(too_long.status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn display_name_is_optional_and_owner_set() {
     let (app, _pool) = test_app().await;
     let (slug, secret) = create_page(&app).await;

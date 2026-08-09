@@ -22,7 +22,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Config> {
-        let bind: SocketAddr = env_or("BIND", "127.0.0.1:8080").parse()?;
+        let bind: SocketAddr = env_or("BIND", "0.0.0.0:8080").parse()?;
         let database_url = env_or("DATABASE_URL", "sqlite://anonbookrec.db");
         let public_base_url = std::env::var("PUBLIC_BASE_URL")
             .unwrap_or_else(|_| format!("http://{bind}"))

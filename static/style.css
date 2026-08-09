@@ -236,6 +236,49 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
 .rec-controls .button { font-weight: 500; }
 .empty { color: var(--ink-soft); font-style: italic; margin: 1rem 0 0; }
 
+.rec-note {
+  width: 100%;
+  margin: 0.15rem 0 0;
+  padding: 0.1rem 0 0.1rem 0.7rem;
+  border-left: 2px solid var(--rule);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.confirm-note {
+  margin-top: 0.4rem;
+  width: 100%;
+  font: 0.85rem var(--sans);
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+  resize: vertical;
+}
+
+/* Unlock (sign back in) */
+.unlock-panel {
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+.unlock-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.unlock-row input {
+  flex: 1;
+  min-width: 0;
+  font: 0.85rem var(--mono);
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+}
+
 /* Owner panel */
 .owner-panel {
   border: 1px dashed var(--cloth);

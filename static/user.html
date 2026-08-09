@@ -21,10 +21,21 @@
     </p>
   </section>
 
+  <section class="unlock-panel" id="unlock-panel" hidden>
+    <span class="owner-note">Your card? Unlock it with your secret key.</span>
+    <form id="unlock-form" class="unlock-row">
+      <input id="unlock-key" type="password" placeholder="Paste your secret key"
+             autocomplete="off">
+      <button class="button small" type="submit">Unlock</button>
+    </form>
+    <p id="unlock-status" class="status error" role="status"></p>
+  </section>
+
   <section class="owner-panel" id="owner-panel" hidden>
     <div class="owner-row">
       <span class="owner-note">This is your card.</span>
       <button id="copy-share" class="button small" type="button">Copy share link</button>
+      <button id="logout" class="button small danger" type="button">Sign out</button>
     </div>
     <div class="owner-name">
       <label for="display-name">Public name (optional)</label>
@@ -64,6 +75,8 @@
         <span id="confirm-title" class="rec-title"></span>
         <span id="confirm-author" class="confirm-author"></span>
         <span id="confirm-isbn" class="rec-isbn"></span>
+        <textarea id="book-note" class="confirm-note" maxlength="500" rows="2"
+                  placeholder="Add a note (optional) — “I think you’ll enjoy this because…”"></textarea>
       </div>
       <div class="confirm-actions">
         <button id="confirm-submit" class="button primary small" type="button">Recommend this book</button>
