@@ -1,55 +1,67 @@
 # AnonBookRec
 
-Anonymous book recommendations. Create a page, share the link anywhere — anyone can
-recommend you a book. No accounts, no emails, no personal information.
+AnonBookRec gives anonymous book recommendations. You create a page. You share
+the link. Then each person can recommend a book to you. The system does not use
+accounts, emails, or personal information.
 
-- **Rust + Axum + SQLite** — a single binary and a single database file.
-- **ISBN cross-referencing** — every submission is resolved against
-  [Open Library](https://openlibrary.org) (by title or ISBN, with local ISBN-10/13
-  checksum validation), so only real books are ever stored. Duplicates increment a
-  counter instead of creating rows, one count per anonymous submitter.
-- **Email-less keying** — creating a page mints a random secret (shown exactly once);
-  the server stores only its SHA-256 hash. The page URL is the shareable public half.
-- **Encrypted at rest** — private recommendations are sealed to the page's X25519
-  public key. The private key is stored only wrapped under the owner's secret, so a
-  database dump reveals nothing; only the owner, presenting their key, can read them.
-  Public recommendations are plaintext (they're displayed anyway).
-- **Spam resistance** — per-IP rate limiting, ISBN validation, dedupe via blind
-  indexes, 4 KB body limit, strict CSP, parameterized queries throughout.
+- **Rust + Axum + SQLite**: The system is one binary and one database file.
+- **ISBN cross-reference**: The system compares each submission with
+  [Open Library](https://openlibrary.org). It finds the book by its title or its
+  ISBN. It validates the ISBN-10/13 checksum locally. Thus the system stores
+  only real books. A duplicate submission does not make a new row. It increases
+  a counter. Each anonymous submitter increases the counter one time only.
+- **Keys without email**: when you create a page, the system makes a random
+  secret. The system shows the secret one time only. The server stores only the
+  SHA-256 hash of the secret. The page URL is the public half. You can share it.
+- **Encryption at rest**: the system seals each private recommendation with the
+  X25519 public key of the page. The system stores the private key only in a
+  wrapped condition, under the secret of the owner. Thus a copy of the database
+  shows nothing. Only the owner, with the correct key, can read the private
+  recommendations. Public recommendations are plaintext, because the system
+  shows them to all persons.
+- **Spam protection**: the system limits the request rate for each IP address.
+  It validates each ISBN. It finds duplicates with blind indexes. It limits the
+  request body to 4 KB. It applies a strict CSP. It uses parameterized queries
+  in all locations.
 
-## Run
+## Operation
 
 ```sh
 cargo run --release
 # → http://127.0.0.1:8080
 ```
 
-First run creates `anonbookrec.db` (SQLite, WAL) and a `.pepper` file (blind-index
-key — back it up with the database).
+At the first start, the system makes the file `anonbookrec.db` (SQLite, WAL
+mode) and the file `.pepper`. The `.pepper` file holds the blind-index key.
+Make a backup of this file together with the database.
 
 ### Configuration (environment)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `BIND` | `127.0.0.1:8080` | Listen address |
-| `DATABASE_URL` | `sqlite://anonbookrec.db` | SQLite database |
-| `PUBLIC_BASE_URL` | `http://$BIND` | Base for share links, e.g. `https://books.example.com` |
-| `SECURE_COOKIES` | `0` | Set `1` behind HTTPS |
-| `PEPPER` / `PEPPER_FILE` | `.pepper` | 64-hex-char blind-index secret |
-| `STATIC_DIR` | `static` | Frontend assets |
-| `RUST_LOG` | — | e.g. `info` |
+| `BIND` | `127.0.0.1:8080` | The listen address |
+| `DATABASE_URL` | `sqlite://anonbookrec.db` | The SQLite database |
+| `PUBLIC_BASE_URL` | `http://$BIND` | The base for share links, for example `https://books.example.com` |
+| `SECURE_COOKIES` | `0` | Set the value to `1` if you operate behind HTTPS |
+| `PEPPER` / `PEPPER_FILE` | `.pepper` | The blind-index secret, 64 hex characters |
+| `STATIC_DIR` | `static` | The frontend assets |
+| `RUST_LOG` | — | For example `info` |
 
 ## Test
 
 ```sh
-cargo test          # unit + end-to-end API tests (no network; stubbed resolver)
+cargo test
 cargo clippy --all-targets
 ```
 
-## Deploy (HTTPS)
+The tests are unit tests and end-to-end API tests. The tests do not use the
+network. A stub replaces the resolver.
 
-Run the binary behind any TLS-terminating reverse proxy. With
-[Caddy](https://caddyserver.com) (automatic certificates):
+## Deployment (HTTPS)
+
+Operate the binary behind a reverse proxy that terminates TLS. This is an
+example with [Caddy](https://caddyserver.com). Caddy gets the certificates
+automatically:
 
 ```caddyfile
 books.example.com {
@@ -57,10 +69,10 @@ books.example.com {
 }
 ```
 
-Set `PUBLIC_BASE_URL=https://books.example.com` and `SECURE_COOKIES=1`.
-The rate limiter honours `X-Forwarded-For` from the proxy.
+Set `PUBLIC_BASE_URL=https://books.example.com`. Set `SECURE_COOKIES=1`.
+The rate limiter obeys the `X-Forwarded-For` header from the proxy.
 
-systemd unit example:
+This is an example of a systemd unit:
 
 ```ini
 [Unit]
@@ -86,28 +98,31 @@ WantedBy=multi-user.target
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/users` | — | Create a page → `{slug, secret, url}` (secret shown once) |
-| GET | `/api/pages/{slug}` | optional bearer | Public recommendations; owner also sees sealed ones, decrypted |
-| PATCH | `/api/pages/{slug}` | bearer | Set `default_public` and/or optional `display_name` (never in the URL) |
-| GET | `/api/search?q=` | — | Typeahead suggestions (title, author, year, ISBN, cover id) |
-| POST | `/api/pages/{slug}/recommendations` | — | `{book_name}` (title or ISBN) → verify, insert or count |
-| GET | `/api/global` | — | The open shelf (global public board) |
-| POST | `/api/global/recommendations` | — | Recommend with no page at all |
-| PATCH | `/api/recommendations/{id}` | bearer | Toggle `read` / `is_public` (seals or reveals) |
+| POST | `/api/users` | — | Make a page. The result is `{slug, secret, url}`. The system shows the secret one time only |
+| GET | `/api/pages/{slug}` | optional bearer | Get the public recommendations. The owner also gets the sealed recommendations, in decrypted form |
+| PATCH | `/api/pages/{slug}` | bearer | Set `default_public` and/or the optional `display_name`. The name is not a part of the URL |
+| GET | `/api/search?q=` | — | Get typeahead suggestions (title, author, year, ISBN, cover id) |
+| POST | `/api/pages/{slug}/recommendations` | — | Send `{book_name}` (a title or an ISBN). The system validates the book. Then it inserts a row or increases the counter |
+| GET | `/api/global` | — | Get the open shelf (the global public board) |
+| POST | `/api/global/recommendations` | — | Recommend a book without a page |
+| PATCH | `/api/recommendations/{id}` | bearer | Change `read` or `is_public`. This seals the recommendation or shows it |
 | DELETE | `/api/recommendations/{id}` | bearer | Remove spam |
 
-Owner auth is `Authorization: Bearer <secret>`, verified in constant time against the
-stored hash.
+The owner authorization is `Authorization: Bearer <secret>`. The system compares
+the secret with the stored hash in constant time.
 
-## Anonymity & security model
+## Anonymity and security model
 
-- No emails, names, or passwords anywhere. Submitters get an HttpOnly random cookie
-  whose *hash* is stored, used only to stop double-counting.
-- The owner secret never persists server-side. Losing it means private
-  recommendations are unrecoverable **by design** — the UI forces an explicit
-  "I saved my key" confirmation at signup.
-- Private recommendations at rest: `enc_payload` sealed boxes
-  (X25519 + XSalsa20-Poly1305); dedupe uses HMAC blind indexes keyed by a server
-  pepper, so plaintext ISBNs never touch the database for private rows.
-- XSS: all user data is rendered with `textContent`; CSP `default-src 'self'`.
-- SQL injection: sqlx bind parameters everywhere.
+- The system does not store emails, names, or passwords. Each submitter gets an
+  HttpOnly random cookie. The system stores only the *hash* of the cookie. The
+  system uses the hash only to prevent a double count.
+- The server does not keep the owner secret. If you lose the secret, you cannot
+  get the private recommendations again. This is intentional. At signup, the UI
+  makes you confirm "I saved my key".
+- The system stores each private recommendation as an `enc_payload` sealed box
+  (X25519 + XSalsa20-Poly1305). The dedupe function uses HMAC blind indexes,
+  with a server pepper as the key. Thus a plaintext ISBN of a private row does
+  not go into the database.
+- XSS: the system shows all user data with `textContent`. The CSP is
+  `default-src 'self'`.
+- SQL injection: sqlx bind parameters in all locations.
