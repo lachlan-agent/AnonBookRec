@@ -472,6 +472,71 @@ async fn account_deletion_requires_owner_and_removes_everything() {
 }
 
 #[tokio::test]
+async fn key_rotation_invalidates_old_key_and_keeps_sealed_data() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    let page_url = format!("/api/pages/{slug}");
+    let rotate_url = format!("{page_url}/rotate-key");
+
+    // A sealed recommendation that must survive the rotation.
+    call(&app, "PATCH", &page_url, Some(json!({"default_public": false})),
+        Some(&secret), None).await;
+    call(&app, "POST", &format!("{page_url}/recommendations"),
+        Some(json!({"book_name": "The Dispossessed", "note": "sealed for later"})),
+        None, None).await;
+
+    // Signed-in only: no bearer / wrong bearer are rejected.
+    let denied = call(&app, "POST", &rotate_url, None, None, None).await;
+    assert_eq!(denied.status, StatusCode::UNAUTHORIZED);
+    let denied = call(&app, "POST", &rotate_url, None, Some("wrong"), None).await;
+    assert_eq!(denied.status, StatusCode::UNAUTHORIZED);
+
+    let rotated = call(&app, "POST", &rotate_url, None, Some(&secret), None).await;
+    assert_eq!(rotated.status, StatusCode::OK);
+    let new_secret = rotated.body["secret"].as_str().unwrap().to_string();
+    assert_ne!(new_secret, secret);
+
+    // Old key is dead — for reads and for a second rotation.
+    let stale = call(&app, "GET", &page_url, None, Some(&secret), None).await;
+    assert_eq!(stale.status, StatusCode::UNAUTHORIZED);
+    let stale = call(&app, "POST", &rotate_url, None, Some(&secret), None).await;
+    assert_eq!(stale.status, StatusCode::UNAUTHORIZED);
+
+    // New key owns the page and still decrypts the sealed recommendation.
+    let owner = call(&app, "GET", &page_url, None, Some(&new_secret), None).await;
+    assert_eq!(owner.status, StatusCode::OK);
+    assert_eq!(owner.body["owner"], json!(true));
+    let recs = owner.body["recommendations"].as_array().unwrap();
+    assert_eq!(recs.len(), 1);
+    assert_eq!(recs[0]["book_name"], json!("The Dispossessed"));
+    assert_eq!(recs[0]["notes"], json!(["sealed for later"]));
+}
+
+#[tokio::test]
+async fn qr_endpoint_serves_share_url_svg() {
+    let (app, _pool) = test_app().await;
+    let (slug, _) = create_page(&app).await;
+
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/api/pages/{slug}/qr.svg"))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get(header::CONTENT_TYPE).unwrap(),
+        "image/svg+xml"
+    );
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let svg = String::from_utf8(bytes.to_vec()).unwrap();
+    assert!(svg.contains("<svg"), "response must be an SVG document");
+
+    let missing = call(&app, "GET", "/api/pages/doesnotexist/qr.svg", None, None, None).await;
+    assert_eq!(missing.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn search_returns_suggestions_with_metadata() {
     let (app, _pool) = test_app().await;
 

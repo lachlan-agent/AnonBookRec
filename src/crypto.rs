@@ -59,7 +59,14 @@ fn wrap_key(secret: &str) -> ChaCha20Poly1305 {
 pub fn new_page_keys(secret: &str) -> (Vec<u8>, Vec<u8>) {
     let private = SecretKey::generate(&mut OsRng);
     let public = private.public_key().as_bytes().to_vec();
+    let wrapped = wrap_private_key(secret, &private);
+    (public, wrapped)
+}
 
+/// Wrap an existing page private key under a (possibly new) owner secret.
+/// Used on key rotation: the keypair stays the same so sealed payloads remain
+/// readable, only the wrapping secret changes.
+pub fn wrap_private_key(secret: &str, private: &SecretKey) -> Vec<u8> {
     let mut nonce = [0u8; NONCE_LEN];
     OsRng.fill_bytes(&mut nonce);
     let ciphertext = wrap_key(secret)
@@ -68,7 +75,7 @@ pub fn new_page_keys(secret: &str) -> (Vec<u8>, Vec<u8>) {
 
     let mut wrapped = nonce.to_vec();
     wrapped.extend_from_slice(&ciphertext);
-    (public, wrapped)
+    wrapped
 }
 
 /// Recover the page's private key with the owner's secret. `None` on a wrong

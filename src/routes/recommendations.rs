@@ -390,6 +390,8 @@ pub async fn patch_rec(
     }
 
     if let Some(make_public) = body.is_public {
+        // Reveal/hide touches the recommendation row and every attached note;
+        // one transaction so a failure can't leave them half-converted.
         if make_public && !row.is_public {
             // Reveal: decrypt with the owner's (bearer-derived) private key
             // and store plaintext.
@@ -402,6 +404,7 @@ pub async fn patch_rec(
                 .ok_or_else(|| anyhow::anyhow!("sealed payload failed to open"))?;
             let sealed: SealedBook = serde_json::from_slice(&opened)
                 .map_err(|e| anyhow::anyhow!("sealed payload is corrupt: {e}"))?;
+            let mut tx = state.pool.begin().await?;
             sqlx::query(
                 "UPDATE recommendations
                  SET book_name = ?, isbn = ?, enc_payload = NULL, is_public = 1 WHERE id = ?",
@@ -409,7 +412,7 @@ pub async fn patch_rec(
             .bind(&sealed.book_name)
             .bind(&sealed.isbn)
             .bind(rec_id)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?;
 
             // Reveal the submitter notes along with the book.
@@ -418,7 +421,7 @@ pub async fn patch_rec(
                  WHERE recommendation_id = ? AND enc_note IS NOT NULL",
             )
             .bind(rec_id)
-            .fetch_all(&state.pool)
+            .fetch_all(&mut *tx)
             .await?;
             for (rowid, enc_note) in votes {
                 let text = crypto::unseal(&private_key, &enc_note)
@@ -429,9 +432,10 @@ pub async fn patch_rec(
                 )
                 .bind(&text)
                 .bind(rowid)
-                .execute(&state.pool)
+                .execute(&mut *tx)
                 .await?;
             }
+            tx.commit().await?;
         } else if !make_public && row.is_public {
             // Hide: seal the plaintext to the page's public key.
             let payload = serde_json::to_vec(&SealedBook {
@@ -440,13 +444,14 @@ pub async fn patch_rec(
             })
             .expect("sealed payload serializes");
             let sealed = crypto::seal(&user.public_key, &payload)?;
+            let mut tx = state.pool.begin().await?;
             sqlx::query(
                 "UPDATE recommendations
                  SET book_name = NULL, isbn = NULL, enc_payload = ?, is_public = 0 WHERE id = ?",
             )
             .bind(&sealed)
             .bind(rec_id)
-            .execute(&state.pool)
+            .execute(&mut *tx)
             .await?;
 
             // Seal the submitter notes along with the book.
@@ -455,7 +460,7 @@ pub async fn patch_rec(
                  WHERE recommendation_id = ? AND note IS NOT NULL",
             )
             .bind(rec_id)
-            .fetch_all(&state.pool)
+            .fetch_all(&mut *tx)
             .await?;
             for (rowid, text) in votes {
                 let sealed_note = crypto::seal(&user.public_key, text.as_bytes())?;
@@ -464,9 +469,10 @@ pub async fn patch_rec(
                 )
                 .bind(&sealed_note)
                 .bind(rowid)
-                .execute(&state.pool)
+                .execute(&mut *tx)
                 .await?;
             }
+            tx.commit().await?;
         }
     }
 
