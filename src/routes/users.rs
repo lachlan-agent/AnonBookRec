@@ -53,6 +53,7 @@ pub struct PageView {
     pub slug: String,
     pub owner: bool,
     pub default_public: bool,
+    pub display_name: Option<String>,
     pub recommendations: Vec<RecommendationView>,
 }
 
@@ -82,13 +83,17 @@ pub async fn get_page(
         slug: user.slug,
         owner: private_key.is_some(),
         default_public: user.default_public,
+        display_name: user.display_name,
         recommendations,
     }))
 }
 
 #[derive(Deserialize)]
 pub struct PagePatch {
-    pub default_public: bool,
+    pub default_public: Option<bool>,
+    /// Optional public name for the page. Empty string clears it. Never part
+    /// of the URL — the slug stays random.
+    pub display_name: Option<String>,
 }
 
 pub async fn patch_page(
@@ -99,10 +104,29 @@ pub async fn patch_page(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
     auth::require_owner(&user, &headers)?;
-    sqlx::query("UPDATE users SET default_public = ? WHERE id = ?")
-        .bind(body.default_public)
-        .bind(user.id)
-        .execute(&state.pool)
-        .await?;
-    Ok(Json(json!({ "default_public": body.default_public })))
+
+    if let Some(default_public) = body.default_public {
+        sqlx::query("UPDATE users SET default_public = ? WHERE id = ?")
+            .bind(default_public)
+            .bind(user.id)
+            .execute(&state.pool)
+            .await?;
+    }
+
+    let mut display_name = body.display_name;
+    if let Some(name) = &mut display_name {
+        let trimmed = name.trim();
+        if trimmed.chars().count() > 64 {
+            return Err(AppError::BadRequest("display name is too long (max 64)".into()));
+        }
+        let cleared = trimmed.is_empty();
+        *name = trimmed.to_string();
+        sqlx::query("UPDATE users SET display_name = ? WHERE id = ?")
+            .bind(if cleared { None } else { Some(name.clone()) })
+            .bind(user.id)
+            .execute(&state.pool)
+            .await?;
+    }
+
+    Ok(Json(json!({ "ok": true })))
 }

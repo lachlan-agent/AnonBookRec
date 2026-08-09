@@ -17,11 +17,12 @@ pub struct User {
     pub public_key: Vec<u8>,
     pub enc_private_key: Vec<u8>,
     pub default_public: bool,
+    pub display_name: Option<String>,
 }
 
 pub async fn user_by_slug(pool: &SqlitePool, slug: &str) -> Result<Option<User>, AppError> {
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public
+        "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public, display_name
          FROM users WHERE slug = ?",
     )
     .bind(slug)
@@ -32,7 +33,7 @@ pub async fn user_by_slug(pool: &SqlitePool, slug: &str) -> Result<Option<User>,
 
 pub async fn user_by_id(pool: &SqlitePool, id: i64) -> Result<Option<User>, AppError> {
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public
+        "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public, display_name
          FROM users WHERE id = ?",
     )
     .bind(id)

@@ -340,6 +340,39 @@ async fn global_board_visit_and_submit() {
 }
 
 #[tokio::test]
+async fn display_name_is_optional_and_owner_set() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    let page_url = format!("/api/pages/{slug}");
+
+    let anonymous = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(anonymous.body["display_name"], Value::Null);
+
+    // Only the owner can set it.
+    let denied = call(&app, "PATCH", &page_url,
+        Some(json!({"display_name": "Lachy"})), None, None).await;
+    assert_eq!(denied.status, StatusCode::UNAUTHORIZED);
+
+    let set = call(&app, "PATCH", &page_url,
+        Some(json!({"display_name": "  Lachy  "})), Some(&secret), None).await;
+    assert_eq!(set.status, StatusCode::OK);
+
+    // Visitors see the trimmed name; the slug (URL) is unchanged.
+    let visitor = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(visitor.body["display_name"], json!("Lachy"));
+    assert_eq!(visitor.body["slug"], json!(slug));
+
+    let too_long = call(&app, "PATCH", &page_url,
+        Some(json!({"display_name": "x".repeat(65)})), Some(&secret), None).await;
+    assert_eq!(too_long.status, StatusCode::BAD_REQUEST);
+
+    // Empty string clears it.
+    call(&app, "PATCH", &page_url, Some(json!({"display_name": ""})), Some(&secret), None).await;
+    let cleared = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(cleared.body["display_name"], Value::Null);
+}
+
+#[tokio::test]
 async fn search_returns_suggestions_with_metadata() {
     let (app, _pool) = test_app().await;
 

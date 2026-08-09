@@ -343,13 +343,20 @@ async function loadUserPage(slug) {
   const page = await api(`/api/pages/${encodeURIComponent(slug)}`, { headers });
 
   if (page.owner) {
-    $("page-title").textContent = "Your card";
+    $("page-title").textContent = page.display_name
+      ? `${page.display_name}'s card` : "Your card";
     $("page-sub").textContent =
       "Share your link and books will appear here. Only you can see sealed ones.";
     $("owner-panel").hidden = false;
     $("default-public").checked = page.default_public;
+    if (document.activeElement !== $("display-name")) {
+      $("display-name").value = page.display_name || "";
+    }
     $("shelf-note").textContent = "your recommendations";
   } else {
+    $("page-title").textContent = page.display_name
+      ? `Recommend ${page.display_name} a book`
+      : "Recommend this reader a book";
     $("shelf-note").textContent = "what others have recommended";
   }
   renderList(page.recommendations, { owner: page.owner, secret, slug });
@@ -373,6 +380,19 @@ function initUser() {
   $("copy-share").addEventListener("click", async () => {
     await navigator.clipboard.writeText(`${window.location.origin}/u/${slug}`);
     setStatus("Share link copied.");
+  });
+
+  $("save-name").addEventListener("click", async () => {
+    try {
+      await api(`/api/pages/${encodeURIComponent(slug)}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ display_name: $("display-name").value }),
+      });
+      setStatus($("display-name").value.trim()
+        ? "Name saved — visitors will see it." : "Name cleared.");
+      await loadUserPage(slug);
+    } catch (err) { showError(err); }
   });
 
   $("default-public").addEventListener("change", async (event) => {

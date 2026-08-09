@@ -247,6 +247,19 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
 }
 .owner-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.5rem; }
 .owner-note { font-family: var(--serif); font-style: italic; }
+.owner-name { margin-bottom: 0.7rem; }
+.owner-name label { font-size: 0.8rem; color: var(--ink-soft); display: block; margin-bottom: 0.25rem; }
+.owner-name-row { display: flex; gap: 0.5rem; }
+.owner-name-row input {
+  flex: 1;
+  min-width: 0;
+  font: 0.9rem var(--sans);
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+}
 .owner-toggle { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }
 .owner-hint { color: var(--ink-soft); font-size: 0.8rem; margin: 0.3rem 0 0 1.6rem; }
 

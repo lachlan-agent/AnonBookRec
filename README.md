@@ -88,7 +88,8 @@ WantedBy=multi-user.target
 |---|---|---|---|
 | POST | `/api/users` | — | Create a page → `{slug, secret, url}` (secret shown once) |
 | GET | `/api/pages/{slug}` | optional bearer | Public recommendations; owner also sees sealed ones, decrypted |
-| PATCH | `/api/pages/{slug}` | bearer | Set `default_public` for incoming recommendations |
+| PATCH | `/api/pages/{slug}` | bearer | Set `default_public` and/or optional `display_name` (never in the URL) |
+| GET | `/api/search?q=` | — | Typeahead suggestions (title, author, year, ISBN, cover id) |
 | POST | `/api/pages/{slug}/recommendations` | — | `{book_name}` (title or ISBN) → verify, insert or count |
 | GET | `/api/global` | — | The open shelf (global public board) |
 | POST | `/api/global/recommendations` | — | Recommend with no page at all |
