@@ -121,6 +121,13 @@ pub fn build_app(state: AppState) -> Router {
         .route("/u/{slug}", user_page)
         .route_service("/about", about_page)
         .fallback_service(static_files)
+        // Static assets revalidate on every load (ServeDir answers 304s), so
+        // a deploy can never leave a browser running old HTML against new JS.
+        // API routes already carry no-store; the QR sets its own max-age.
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache"),
+        ))
         .layer(DefaultBodyLimit::max(4096))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CONTENT_SECURITY_POLICY,
