@@ -1,5 +1,6 @@
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
+use axum::http::{header, HeaderMap};
+use axum::response::IntoResponse;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -170,6 +171,72 @@ pub async fn patch_page(
     }
 
     Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Serialize)]
+pub struct RotatedKey {
+    pub secret: String,
+}
+
+/// Replace the owner's secret with a freshly generated one (owner only — the
+/// current secret must be presented as the bearer). The page keypair is
+/// preserved: the private key is unwrapped with the old secret and re-wrapped
+/// under the new one, so sealed recommendations stay readable. The old secret
+/// stops working the moment the update lands.
+pub async fn rotate_key(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<RotatedKey>, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    let old_secret = auth::require_owner(&user, &headers)?;
+    let private = crypto::unwrap_private_key(&old_secret, &user.enc_private_key)
+        .ok_or_else(|| anyhow::anyhow!("stored private key failed to unwrap"))?;
+
+    let new_secret = crypto::generate_secret();
+    let new_hash = crypto::hash_secret(&new_secret);
+    let rewrapped = crypto::wrap_private_key(&new_secret, &private);
+
+    // Guard on the old hash so concurrent rotations can't both win; the loser
+    // matched 0 rows, meaning the key it presented is already stale.
+    let updated = sqlx::query(
+        "UPDATE users SET secret_hash = ?, enc_private_key = ? WHERE id = ? AND secret_hash = ?",
+    )
+    .bind(&new_hash)
+    .bind(&rewrapped)
+    .bind(user.id)
+    .bind(&user.secret_hash)
+    .execute(&state.pool)
+    .await?
+    .rows_affected();
+    if updated == 0 {
+        return Err(AppError::Unauthorized);
+    }
+    Ok(Json(RotatedKey { secret: new_secret }))
+}
+
+/// SVG QR code of the page's share URL. No auth: the slug in the request path
+/// already is the share URL's secret-free public half.
+pub async fn qr_svg(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    let url = format!("{}/u/{}", state.config.public_base_url, user.slug);
+    let code = qrcode::QrCode::new(url.as_bytes())
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("qr encoding failed: {e}")))?;
+    let svg = code
+        .render::<qrcode::render::svg::Color>()
+        .min_dimensions(240, 240)
+        .quiet_zone(true)
+        .build();
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/svg+xml"),
+            (header::CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        svg,
+    ))
 }
 
 /// Permanently delete the page and everything attached to it (owner only).
