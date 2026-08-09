@@ -430,6 +430,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   font-size: 0.8rem;
   margin: 0.3rem 0 0 1.6rem;
 }
+.share-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .dialog-actions { display: flex; gap: 0.5rem; margin-top: 1.2rem; }
 .dialog-actions #logout { margin-left: auto; }
 

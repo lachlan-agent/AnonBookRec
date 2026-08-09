@@ -399,6 +399,71 @@ function initUser() {
     setTimeout(() => { button.textContent = "Copy share link"; }, 1200);
   });
 
+  // QR: fetch the server-rendered SVG, rasterize to PNG on a canvas.
+  // data: URI keeps the CSP happy (blob: isn't in img-src).
+  async function qrPngBlob() {
+    const response = await fetch(`/api/pages/${encodeURIComponent(slug)}/qr.svg`);
+    if (!response.ok) throw new Error("could not fetch the QR code");
+    const svg = await response.text();
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error("could not render the QR code"));
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return new Promise((resolve, reject) =>
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG encoding failed")),
+        "image/png"));
+  }
+
+  function downloadBlob(blob) {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${location.hostname}-${slug}-qr.png`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  const flashLabel = (button, text, original) => {
+    button.textContent = text;
+    setTimeout(() => { button.textContent = original; }, 1500);
+  };
+
+  $("copy-qr").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try {
+      const blob = await qrPngBlob();
+      // Safari requires the ClipboardItem promise form; fall back to download.
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      flashLabel(button, "QR copied", "Copy QR code");
+    } catch {
+      try {
+        downloadBlob(await qrPngBlob());
+        flashLabel(button, "Downloaded instead", "Copy QR code");
+      } catch (err) {
+        $("settings-dialog").close();
+        showError(err);
+      }
+    }
+  });
+
+  $("download-qr").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try {
+      downloadBlob(await qrPngBlob());
+      flashLabel(button, "Downloaded", "Download QR");
+    } catch (err) {
+      $("settings-dialog").close();
+      showError(err);
+    }
+  });
+
   // Server-rendered QR of the share link, loaded on first use.
   $("show-qr").addEventListener("click", () => {
     const wrap = $("qr-wrap");
