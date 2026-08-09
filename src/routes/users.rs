@@ -54,6 +54,9 @@ pub struct PageView {
     pub owner: bool,
     pub default_public: bool,
     pub display_name: Option<String>,
+    pub bio: Option<String>,
+    pub favourite_book: Option<String>,
+    pub theme: Option<String>,
     pub recommendations: Vec<RecommendationView>,
 }
 
@@ -79,14 +82,23 @@ pub async fn get_page(
 
     let recommendations =
         load_recommendations(&state.pool, Some(user.id), private_key.as_ref()).await?;
+    // The profile (bio, favourite book, theme) belongs to public pages only:
+    // a private page shows visitors nothing but the submission form.
+    let owner = private_key.is_some();
+    let show_profile = owner || user.default_public;
     Ok(Json(PageView {
         slug: user.slug,
-        owner: private_key.is_some(),
+        owner,
         default_public: user.default_public,
         display_name: user.display_name,
+        bio: show_profile.then_some(user.bio).flatten(),
+        favourite_book: show_profile.then_some(user.favourite_book).flatten(),
+        theme: show_profile.then_some(user.theme).flatten(),
         recommendations,
     }))
 }
+
+pub const THEMES: &[&str] = &["cloth", "ink", "plum", "amber"];
 
 #[derive(Deserialize)]
 pub struct PagePatch {
@@ -94,6 +106,24 @@ pub struct PagePatch {
     /// Optional public name for the page. Empty string clears it. Never part
     /// of the URL — the slug stays random.
     pub display_name: Option<String>,
+    pub bio: Option<String>,
+    pub favourite_book: Option<String>,
+    pub theme: Option<String>,
+}
+
+/// Trim an optional text field; empty clears the column (`Some(None)`),
+/// absent means "leave unchanged" (`None`).
+fn clean_text(
+    field: Option<String>,
+    max: usize,
+    label: &str,
+) -> Result<Option<Option<String>>, AppError> {
+    let Some(value) = field else { return Ok(None) };
+    let trimmed = value.trim();
+    if trimmed.chars().count() > max {
+        return Err(AppError::BadRequest(format!("{label} is too long (max {max})")));
+    }
+    Ok(Some((!trimmed.is_empty()).then(|| trimmed.to_string())))
 }
 
 pub async fn patch_page(
@@ -113,19 +143,29 @@ pub async fn patch_page(
             .await?;
     }
 
-    let mut display_name = body.display_name;
-    if let Some(name) = &mut display_name {
-        let trimmed = name.trim();
-        if trimmed.chars().count() > 64 {
-            return Err(AppError::BadRequest("display name is too long (max 64)".into()));
-        }
-        let cleared = trimmed.is_empty();
-        *name = trimmed.to_string();
-        sqlx::query("UPDATE users SET display_name = ? WHERE id = ?")
-            .bind(if cleared { None } else { Some(name.clone()) })
+    let theme = clean_text(body.theme, 16, "theme")?;
+    if let Some(Some(theme)) = &theme
+        && !THEMES.contains(&theme.as_str())
+    {
+        return Err(AppError::BadRequest(format!("unknown theme (try {})", THEMES.join(", "))));
+    }
+
+    let updates = [
+        ("display_name", clean_text(body.display_name, 64, "display name")?),
+        ("bio", clean_text(body.bio, 500, "bio")?),
+        ("favourite_book", clean_text(body.favourite_book, 256, "favourite book")?),
+        ("theme", theme),
+    ];
+    for (column, value) in updates {
+        if let Some(value) = value {
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "UPDATE users SET {column} = ? WHERE id = ?"
+            )))
+            .bind(value)
             .bind(user.id)
             .execute(&state.pool)
             .await?;
+        }
     }
 
     Ok(Json(json!({ "ok": true })))

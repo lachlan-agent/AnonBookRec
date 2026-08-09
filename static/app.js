@@ -351,6 +351,13 @@ async function loadUserPage(slug) {
   const page = await api(`/api/pages/${encodeURIComponent(slug)}`, { headers });
 
   $("unlock-panel").hidden = page.owner || Boolean(secret);
+  document.body.dataset.theme = page.theme || "cloth";
+  $("page-bio").hidden = !page.bio;
+  $("page-bio").textContent = page.bio || "";
+  $("page-fav").hidden = !page.favourite_book;
+  $("page-fav").textContent = page.favourite_book
+    ? `Favourite book: ${page.favourite_book}` : "";
+
   if (page.owner) {
     $("page-title").textContent = page.display_name
       ? `${page.display_name}'s card` : "Your card";
@@ -358,8 +365,15 @@ async function loadUserPage(slug) {
       "Share your link and books will appear here. Only you can see sealed ones.";
     $("owner-panel").hidden = false;
     $("default-public").checked = page.default_public;
-    if (document.activeElement !== $("display-name")) {
-      $("display-name").value = page.display_name || "";
+    $("profile-fields").disabled = !page.default_public;
+    const fields = {
+      "display-name": page.display_name,
+      "theme": page.theme || "cloth",
+      "bio": page.bio,
+      "favourite-book": page.favourite_book,
+    };
+    for (const [id, value] of Object.entries(fields)) {
+      if (document.activeElement !== $(id)) $(id).value = value || "";
     }
     $("shelf-note").textContent = "your recommendations";
   } else {
@@ -416,29 +430,26 @@ function initUser() {
     window.location.reload();
   });
 
-  $("save-name").addEventListener("click", async () => {
-    try {
-      await api(`/api/pages/${encodeURIComponent(slug)}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ display_name: $("display-name").value }),
-      });
-      setStatus($("display-name").value.trim()
-        ? "Name saved — visitors will see it." : "Name cleared.");
-      await loadUserPage(slug);
-    } catch (err) { showError(err); }
+  // The public profile only exists for public pages.
+  $("default-public").addEventListener("change", (event) => {
+    $("profile-fields").disabled = !event.target.checked;
   });
 
-  $("default-public").addEventListener("change", async (event) => {
+  $("save-settings").addEventListener("click", async () => {
     try {
       await api(`/api/pages/${encodeURIComponent(slug)}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ default_public: event.target.checked }),
+        body: JSON.stringify({
+          default_public: $("default-public").checked,
+          display_name: $("display-name").value,
+          theme: $("theme").value,
+          bio: $("bio").value,
+          favourite_book: $("favourite-book").value,
+        }),
       });
-      setStatus(event.target.checked
-        ? "New recommendations will be public."
-        : "New recommendations will arrive sealed.");
+      setStatus("Settings saved.");
+      await loadUserPage(slug);
     } catch (err) { showError(err); }
   });
 }

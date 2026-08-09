@@ -429,6 +429,39 @@ async fn display_name_is_optional_and_owner_set() {
 }
 
 #[tokio::test]
+async fn profile_only_shown_for_public_pages() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    let page_url = format!("/api/pages/{slug}");
+
+    let set = call(&app, "PATCH", &page_url,
+        Some(json!({"bio": "I read at night", "favourite_book": "The Dispossessed",
+                    "theme": "plum"})),
+        Some(&secret), None).await;
+    assert_eq!(set.status, StatusCode::OK);
+
+    let bad_theme = call(&app, "PATCH", &page_url,
+        Some(json!({"theme": "neon"})), Some(&secret), None).await;
+    assert_eq!(bad_theme.status, StatusCode::BAD_REQUEST);
+
+    // Public page: visitors see the profile.
+    let visitor = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(visitor.body["bio"], json!("I read at night"));
+    assert_eq!(visitor.body["favourite_book"], json!("The Dispossessed"));
+    assert_eq!(visitor.body["theme"], json!("plum"));
+
+    // Private page: profile hidden from visitors, still there for the owner.
+    call(&app, "PATCH", &page_url, Some(json!({"default_public": false})),
+        Some(&secret), None).await;
+    let visitor = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(visitor.body["bio"], Value::Null);
+    assert_eq!(visitor.body["favourite_book"], Value::Null);
+    assert_eq!(visitor.body["theme"], Value::Null);
+    let owner = call(&app, "GET", &page_url, None, Some(&secret), None).await;
+    assert_eq!(owner.body["bio"], json!("I read at night"));
+}
+
+#[tokio::test]
 async fn search_returns_suggestions_with_metadata() {
     let (app, _pool) = test_app().await;
 

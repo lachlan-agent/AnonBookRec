@@ -19,6 +19,8 @@
       Whatever you think they should read next. No name needed — they'll
       never know it was you.
     </p>
+    <p id="page-bio" class="page-bio" hidden></p>
+    <p id="page-fav" class="page-fav" hidden></p>
   </section>
 
   <section class="unlock-panel" id="unlock-panel" hidden>
@@ -37,22 +39,45 @@
       <button id="copy-share" class="button small" type="button">Copy share link</button>
       <button id="logout" class="button small danger" type="button">Sign out</button>
     </div>
-    <div class="owner-name">
-      <label for="display-name">Public name (optional)</label>
-      <div class="owner-name-row">
+    <details class="settings">
+      <summary>Page settings</summary>
+      <label class="owner-toggle">
+        <input id="default-public" type="checkbox">
+        Show new recommendations publicly
+      </label>
+      <p class="owner-hint">
+        When unchecked, new recommendations arrive sealed — encrypted so only
+        you, with your key, can read them — and your profile below is hidden.
+      </p>
+      <div class="settings-field">
+        <label for="display-name">Public name (optional)</label>
         <input id="display-name" type="text" maxlength="64"
                placeholder="Shown to visitors — leave empty to stay unnamed">
-        <button id="save-name" class="button small" type="button">Save</button>
       </div>
-    </div>
-    <label class="owner-toggle">
-      <input id="default-public" type="checkbox">
-      Show new recommendations publicly
-    </label>
-    <p class="owner-hint">
-      When unchecked, new recommendations arrive sealed — encrypted so only
-      you, with your key, can read them.
-    </p>
+      <fieldset id="profile-fields" class="settings-profile">
+        <legend>Public profile</legend>
+        <div class="settings-field">
+          <label for="theme">Page colour</label>
+          <select id="theme">
+            <option value="cloth">Bookcloth green</option>
+            <option value="ink">Ink blue</option>
+            <option value="plum">Plum</option>
+            <option value="amber">Amber</option>
+          </select>
+        </div>
+        <div class="settings-field">
+          <label for="bio">Bio</label>
+          <textarea id="bio" maxlength="500" rows="3"
+                    placeholder="A line about you or your taste in books"></textarea>
+        </div>
+        <div class="settings-field">
+          <label for="favourite-book">Favourite book</label>
+          <input id="favourite-book" type="text" maxlength="256"
+                 placeholder="The one you press into people's hands">
+        </div>
+      </fieldset>
+      <button id="save-settings" class="button primary small" type="button">Save settings</button>
+    </details>
   </section>
 
   <section class="shelf">
