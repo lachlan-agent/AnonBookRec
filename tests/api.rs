@@ -251,60 +251,74 @@ async fn rotation_disables_password_login_until_reset() {
 }
 
 #[tokio::test]
-async fn hidden_pages_exist_only_behind_their_share_token() {
+async fn hidden_pages_truly_hidden_until_friend_link_minted() {
     let (app, _pool) = test_app().await;
     let (slug, secret) = create_page(&app).await;
     let page_url = format!("/api/pages/{slug}");
 
-    // Give it a username too, then hide it.
     call(&app, "POST", &format!("/api/pages/{slug}/credentials"),
         Some(json!({"username": "ghostwriter", "password": "longenough"})),
         Some(&secret), None).await;
-    let hidden = call(&app, "PATCH", &page_url,
-        Some(json!({"is_hidden": true})), Some(&secret), None).await;
-    assert_eq!(hidden.status, StatusCode::OK);
+    call(&app, "PATCH", &page_url, Some(json!({"is_hidden": true})),
+        Some(&secret), None).await;
 
-    // Owner still sees it (bearer) and learns the share handle.
+    // Hiding mints NO share link: page is owner-only.
     let owner = call(&app, "GET", &page_url, None, Some(&secret), None).await;
     assert_eq!(owner.body["is_hidden"], json!(true));
-    let share = owner.body["handle"].as_str().unwrap().to_string();
-    assert_ne!(share, slug);
-    assert_ne!(share, "ghostwriter");
+    assert_eq!(owner.body["share_token"], Value::Null);
 
-    // Canonical identifiers are dead to visitors: API, HTML shell, QR, submit.
+    // Canonical identifiers are dead to visitors.
     for ident in [slug.as_str(), "ghostwriter"] {
         let api_get = call(&app, "GET", &format!("/api/pages/{ident}"), None, None, None).await;
         assert_eq!(api_get.status, StatusCode::NOT_FOUND, "api {ident}");
         let html = call(&app, "GET", &format!("/u/{ident}"), None, None, None).await;
         assert_eq!(html.status, StatusCode::NOT_FOUND, "html {ident}");
-        let qr = call(&app, "GET", &format!("/api/pages/{ident}/qr.svg"), None, None, None).await;
-        assert_eq!(qr.status, StatusCode::NOT_FOUND, "qr {ident}");
         let submit = call(&app, "POST", &format!("/api/pages/{ident}/recommendations"),
             Some(json!({"book_name": "The Dispossessed"})), None, None).await;
         assert_eq!(submit.status, StatusCode::NOT_FOUND, "submit {ident}");
     }
 
-    // The share token URL works for everything a visitor needs.
-    let api_get = call(&app, "GET", &format!("/api/pages/{share}"), None, None, None).await;
-    assert_eq!(api_get.status, StatusCode::OK);
-    let html = call(&app, "GET", &format!("/u/{share}"), None, None, None).await;
+    // The owner door serves the shell for ANY slug, uniformly (no leak).
+    let unlock = call(&app, "GET", &format!("/u/{slug}?unlock"), None, None, None).await;
+    assert_eq!(unlock.status, StatusCode::OK);
+    let unlock_garbage = call(&app, "GET", "/u/never-existed?unlock", None, None, None).await;
+    assert_eq!(unlock_garbage.status, StatusCode::OK);
+
+    // Mint a friend link on request; it opens the page for visitors.
+    let minted = call(&app, "POST", &format!("/api/pages/{slug}/share-link"),
+        None, Some(&secret), None).await;
+    assert_eq!(minted.status, StatusCode::OK);
+    let token = minted.body["share_token"].as_str().unwrap().to_string();
+    let via_token = call(&app, "GET", &format!("/api/pages/{token}"), None, None, None).await;
+    assert_eq!(via_token.status, StatusCode::OK);
+    let html = call(&app, "GET", &format!("/u/{token}"), None, None, None).await;
     assert_eq!(html.status, StatusCode::OK);
-    let submit = call(&app, "POST", &format!("/api/pages/{share}/recommendations"),
-        Some(json!({"book_name": "The Dispossessed"})), None, None).await;
-    assert_eq!(submit.status, StatusCode::OK);
 
-    // Password login hands back the share handle, not the dead username URL.
-    let login = call(&app, "POST", "/api/login",
-        Some(json!({"username": "ghostwriter", "password": "longenough"})), None, None).await;
-    assert_eq!(login.body["handle"], json!(share));
+    // Regenerating rotates: old token dies, new one works.
+    let rotated = call(&app, "POST", &format!("/api/pages/{slug}/share-link"),
+        None, Some(&secret), None).await;
+    let token2 = rotated.body["share_token"].as_str().unwrap().to_string();
+    assert_ne!(token, token2);
+    let old = call(&app, "GET", &format!("/api/pages/{token}"), None, None, None).await;
+    assert_eq!(old.status, StatusCode::NOT_FOUND);
+    let fresh = call(&app, "GET", &format!("/api/pages/{token2}"), None, None, None).await;
+    assert_eq!(fresh.status, StatusCode::OK);
 
-    // Unhide: canonical URLs come back, share link keeps working as an alias.
+    // Revoking kills the link entirely; owner access survives.
+    let revoked = call(&app, "DELETE", &format!("/api/pages/{slug}/share-link"),
+        None, Some(&secret), None).await;
+    assert_eq!(revoked.status, StatusCode::OK);
+    assert_eq!(revoked.body["handle"], json!("ghostwriter"));
+    let dead = call(&app, "GET", &format!("/api/pages/{token2}"), None, None, None).await;
+    assert_eq!(dead.status, StatusCode::NOT_FOUND);
+    let owner = call(&app, "GET", &page_url, None, Some(&secret), None).await;
+    assert_eq!(owner.status, StatusCode::OK);
+
+    // Unhide restores public access via canonical URLs.
     call(&app, "PATCH", &page_url, Some(json!({"is_hidden": false})),
         Some(&secret), None).await;
-    let api_get = call(&app, "GET", "/api/pages/ghostwriter", None, None, None).await;
-    assert_eq!(api_get.status, StatusCode::OK);
-    let alias = call(&app, "GET", &format!("/api/pages/{share}"), None, None, None).await;
-    assert_eq!(alias.status, StatusCode::OK);
+    let public = call(&app, "GET", "/api/pages/ghostwriter", None, None, None).await;
+    assert_eq!(public.status, StatusCode::OK);
 }
 
 #[tokio::test]

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Recommend a book</title>
 <link rel="stylesheet" href="/style.css">
 <script src="/app.js" defer></script>
@@ -66,9 +67,18 @@
     </label>
     <p class="owner-hint">
       Hidden pages vanish from their normal address — username and short
-      links answer with a 404. Only the long share link (or signing in)
-      reaches the page, so it can't be found by guessing or search engines.
+      links answer with a 404. By default only you can reach the page (with
+      your key or sign-in). Create a friend link below if you want to let
+      someone in; revoke or regenerate it at any time.
     </p>
+    <div id="share-zone" class="share-zone" hidden>
+      <div class="share-row">
+        <button id="create-share-link" class="button small" type="button">Create friend link</button>
+        <button id="copy-share-link" class="button small" type="button" hidden>Copy friend link</button>
+        <button id="revoke-share-link" class="button small danger" type="button" hidden>Revoke</button>
+      </div>
+      <p id="share-link-status" class="owner-hint"></p>
+    </div>
     <div class="settings-field">
       <label for="display-name">Public name (optional)</label>
       <input id="display-name" type="text" maxlength="64"

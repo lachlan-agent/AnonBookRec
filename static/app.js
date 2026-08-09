@@ -349,12 +349,16 @@ function pageSlug() {
   return decodeURIComponent(window.location.pathname.split("/").pop());
 }
 
+/* Latest page state, for handlers that need more than the slug. */
+let currentPage = null;
+
 async function loadUserPage(slug) {
   const secret = localStorage.getItem(`abr_secret_${slug}`);
   const page = await api(`/api/pages/${encodeURIComponent(slug)}`, {
     headers: secret ? bearer(secret) : {},
   });
 
+  currentPage = page;
   $("unlock-panel").hidden = page.owner || Boolean(secret);
   document.body.dataset.theme = page.theme || "cloth";
   $("page-bio").hidden = !page.bio;
@@ -384,12 +388,19 @@ async function loadUserPage(slug) {
       if (document.activeElement !== $(id)) $(id).value = value || "";
     }
     $("hide-page").checked = page.is_hidden;
-    // Hidden pages live at their share-token URL; if the canonical address
-    // was used (e.g. right after hiding), migrate storage and the URL bar.
+    $("share-zone").hidden = !page.is_hidden;
+    const hasLink = Boolean(page.share_token);
+    $("create-share-link").textContent = hasLink ? "New friend link" : "Create friend link";
+    $("copy-share-link").hidden = !hasLink;
+    $("revoke-share-link").hidden = !hasLink;
+    $("share-link-status").textContent = hasLink
+      ? `Friend link: ${window.location.origin}/u/${page.share_token}`
+      : "No friend link — only you can open this page right now.";
+    // Keep localStorage keyed under whatever handle the server prefers, so
+    // sign-ins and redirects always find the secret.
     if (page.handle && page.handle !== slug) {
       localStorage.setItem(`abr_secret_${page.handle}`, secret);
       localStorage.setItem("abr_last_slug", page.handle);
-      history.replaceState(null, "", `/u/${encodeURIComponent(page.handle)}`);
     }
     $("account-current").textContent = page.username
       ? `Current username: ${page.username}.` : "No username set yet.";
@@ -431,10 +442,59 @@ function initUser() {
   });
 
   $("copy-share").addEventListener("click", async (event) => {
-    await navigator.clipboard.writeText(`${window.location.origin}/u/${slug}`);
     const button = event.currentTarget;
+    // A hidden page's canonical URL is dead to visitors — share the friend
+    // link instead, or say why there is nothing to share yet.
+    if (currentPage?.is_hidden) {
+      if (!currentPage.share_token) {
+        button.textContent = "Create a friend link first";
+        setTimeout(() => { button.textContent = "Copy share link"; }, 1800);
+        return;
+      }
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/u/${currentPage.share_token}`);
+    } else {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/u/${currentPage?.handle || slug}`);
+    }
     button.textContent = "Link copied";
     setTimeout(() => { button.textContent = "Copy share link"; }, 1200);
+  });
+
+  $("create-share-link").addEventListener("click", async () => {
+    try {
+      await api(`/api/pages/${encodeURIComponent(slug)}/share-link`, {
+        method: "POST",
+        headers: bearer(secret),
+      });
+      await loadUserPage(slug);
+    } catch (err) { showError(err); }
+  });
+
+  $("copy-share-link").addEventListener("click", async (event) => {
+    if (!currentPage?.share_token) return;
+    await navigator.clipboard.writeText(
+      `${window.location.origin}/u/${currentPage.share_token}`);
+    const button = event.currentTarget;
+    button.textContent = "Copied";
+    setTimeout(() => { button.textContent = "Copy friend link"; }, 1200);
+  });
+
+  $("revoke-share-link").addEventListener("click", async () => {
+    try {
+      const result = await api(`/api/pages/${encodeURIComponent(slug)}/share-link`, {
+        method: "DELETE",
+        headers: bearer(secret),
+      });
+      // If the browser sits on the now-dead token URL, move to the owner door.
+      if (slug === currentPage?.share_token) {
+        localStorage.setItem(`abr_secret_${result.handle}`, secret);
+        localStorage.setItem("abr_last_slug", result.handle);
+        window.location.replace(`/u/${encodeURIComponent(result.handle)}?unlock`);
+        return;
+      }
+      await loadUserPage(slug);
+    } catch (err) { showError(err); }
   });
 
   // QR: fetch the server-rendered SVG, rasterize to PNG on a canvas.
@@ -704,5 +764,18 @@ function initUser() {
   });
 }
 
+/* On the 404 page: if this browser holds a key for the requested card, it is
+   probably the owner of a hidden page — go through the owner door, which
+   serves the shell for any slug and lets the API decide. */
+function initNotFound() {
+  const path = window.location.pathname;
+  if (!path.startsWith("/u/") || window.location.search.includes("unlock")) return;
+  const slug = decodeURIComponent(path.split("/").pop());
+  if (localStorage.getItem(`abr_secret_${slug}`)) {
+    window.location.replace(`/u/${encodeURIComponent(slug)}?unlock`);
+  }
+}
+
 if (document.body.dataset.page === "index") initIndex();
 else if (document.body.dataset.page === "user") initUser();
+else if (document.body.dataset.page === "not-found") initNotFound();

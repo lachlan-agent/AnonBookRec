@@ -29,6 +29,10 @@ pub fn build_app(state: AppState) -> Router {
             "/api/pages/{slug}/credentials",
             post(users::set_credentials).delete(users::delete_credentials),
         )
+        .route(
+            "/api/pages/{slug}/share-link",
+            post(users::create_share_link).delete(users::revoke_share_link),
+        )
         .route("/api/pages/{slug}/recommendations", post(recommendations::submit_to_page))
         .route(
             "/api/recommendations/{id}",
@@ -94,16 +98,25 @@ pub fn build_app(state: AppState) -> Router {
         let state = state.clone();
         let user_html = user_html.clone();
         let not_found_html = not_found_html.clone();
-        move |axum::extract::Path(slug): axum::extract::Path<String>| {
+        move |axum::extract::Path(slug): axum::extract::Path<String>,
+              axum::extract::RawQuery(query): axum::extract::RawQuery| {
             let state = state.clone();
             let user_html = user_html.clone();
             let not_found_html = not_found_html.clone();
             async move {
+                // `?unlock` serves the shell for ANY slug — identical response
+                // whether the page exists, is hidden, or never existed, so it
+                // leaks nothing. The API still gates all data; this is the
+                // owner's door into a hidden page (document loads can't carry
+                // a bearer). The 404 page auto-redirects here when the
+                // browser holds a key for the path.
+                if query.as_deref().is_some_and(|q| q.split('&').any(|p| p == "unlock")) {
+                    return Html(user_html).into_response();
+                }
                 match crate::auth::user_by_slug(&state.pool, &slug).await {
-                    // A hidden page's shell is served only at its share-token
-                    // URL; every other identifier 404s like a missing page
-                    // (document loads carry no bearer, so no owner special
-                    // case here — owners use the share URL too).
+                    // A hidden page's shell is otherwise served only at its
+                    // share-token URL; every other identifier 404s exactly
+                    // like a missing page.
                     Ok(Some(user))
                         if !user.is_hidden
                             || user.share_token.as_deref() == Some(slug.as_str()) =>

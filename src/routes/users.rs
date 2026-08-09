@@ -75,6 +75,8 @@ pub struct PageView {
     pub handle: String,
     pub username: Option<String>,
     pub is_hidden: bool,
+    /// Friend link token — owner's eyes only.
+    pub share_token: Option<String>,
     pub owner: bool,
     pub default_public: bool,
     pub display_name: Option<String>,
@@ -115,6 +117,7 @@ pub async fn get_page(
         handle: user.handle().to_string(),
         username: user.username.clone(),
         is_hidden: user.is_hidden,
+        share_token: if owner { user.share_token.clone() } else { None },
         slug: user.slug,
         owner,
         default_public: user.default_public,
@@ -176,15 +179,8 @@ pub async fn patch_page(
     }
 
     if let Some(is_hidden) = body.is_hidden {
-        // First hide mints the long share slug; it persists afterwards so
-        // friend links survive hide/unhide cycles.
-        if is_hidden && user.share_token.is_none() {
-            sqlx::query("UPDATE users SET share_token = ? WHERE id = ?")
-                .bind(crypto::generate_secret())
-                .bind(user.id)
-                .execute(&state.pool)
-                .await?;
-        }
+        // Hiding does NOT mint a share link: a freshly hidden page is
+        // reachable by its owner alone until a friend link is requested.
         sqlx::query("UPDATE users SET is_hidden = ? WHERE id = ?")
             .bind(is_hidden)
             .bind(user.id)
@@ -289,6 +285,42 @@ pub async fn qr_svg(
         ],
         svg,
     ))
+}
+
+/// Mint (or rotate) the friend share link for a hidden page. Regenerating
+/// silently revokes the previous link.
+pub async fn create_share_link(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    auth::require_owner(&user, &headers)?;
+    let token = crypto::generate_secret();
+    sqlx::query("UPDATE users SET share_token = ? WHERE id = ?")
+        .bind(&token)
+        .bind(user.id)
+        .execute(&state.pool)
+        .await?;
+    let url = format!("{}/u/{}", state.config.public_base_url, token);
+    Ok(Json(json!({ "share_token": token, "url": url })))
+}
+
+/// Revoke the friend link. The response carries the canonical handle so the
+/// owner's browser can leave the now-dead token URL.
+pub async fn revoke_share_link(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    auth::require_owner(&user, &headers)?;
+    sqlx::query("UPDATE users SET share_token = NULL WHERE id = ?")
+        .bind(user.id)
+        .execute(&state.pool)
+        .await?;
+    let canonical = user.username.as_deref().unwrap_or(&user.slug);
+    Ok(Json(json!({ "ok": true, "handle": canonical })))
 }
 
 #[derive(Deserialize)]
