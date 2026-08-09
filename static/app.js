@@ -79,6 +79,160 @@ function wireCopyButtons() {
   });
 }
 
+/* ---------- Canvas themes ----------
+
+   Some themes render their backdrop on a fullscreen canvas instead of CSS.
+   One rAF loop, DPR-aware, torn down on theme switch; reduced-motion users
+   get a single static frame. */
+
+const CANVAS_THEMES = {
+  rain: {
+    make: (w, h) => Array.from({ length: 130 }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      len: 8 + Math.random() * 14, speed: 320 + Math.random() * 380,
+      alpha: 0.06 + Math.random() * 0.12,
+    })),
+    draw(ctx, drops, w, h, dt) {
+      ctx.lineWidth = 1;
+      for (const d of drops) {
+        d.y += d.speed * dt;
+        d.x += d.speed * dt * 0.12; // a touch of wind
+        if (d.y > h + d.len) { d.y = -d.len; d.x = Math.random() * w; }
+        ctx.strokeStyle = `rgba(143, 198, 224, ${d.alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - d.len * 0.12, d.y - d.len);
+        ctx.stroke();
+      }
+    },
+  },
+  fireflies: {
+    make: (w, h) => Array.from({ length: 24 }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 14, vy: (Math.random() - 0.5) * 10,
+      phase: Math.random() * Math.PI * 2, rate: 0.4 + Math.random() * 0.8,
+    })),
+    draw(ctx, flies, w, h, dt, t) {
+      for (const f of flies) {
+        f.vx += (Math.random() - 0.5) * 6 * dt;
+        f.vy += (Math.random() - 0.5) * 6 * dt;
+        f.vx = Math.max(-18, Math.min(18, f.vx));
+        f.vy = Math.max(-14, Math.min(14, f.vy));
+        f.x = (f.x + f.vx * dt + w) % w;
+        f.y = (f.y + f.vy * dt + h) % h;
+        const glow = 0.25 + 0.75 * (0.5 + Math.sin(t * f.rate + f.phase) / 2);
+        const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 26);
+        g.addColorStop(0, `rgba(214, 236, 140, ${0.5 * glow})`);
+        g.addColorStop(1, "rgba(214, 236, 140, 0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(f.x - 26, f.y - 26, 52, 52);
+        ctx.fillStyle = `rgba(240, 250, 200, ${0.85 * glow})`;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    },
+  },
+  snow: {
+    make: (w, h) => Array.from({ length: 110 }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      r: 0.8 + Math.random() * 2.2, speed: 18 + Math.random() * 40,
+      phase: Math.random() * Math.PI * 2, sway: 10 + Math.random() * 24,
+    })),
+    draw(ctx, flakes, w, h, dt, t) {
+      for (const f of flakes) {
+        f.y += f.speed * dt;
+        const x = f.x + Math.sin(t * 0.6 + f.phase) * f.sway;
+        if (f.y > h + 4) { f.y = -4; f.x = Math.random() * w; }
+        ctx.fillStyle = `rgba(232, 237, 245, ${0.16 + f.r * 0.14})`;
+        ctx.beginPath();
+        ctx.arc(x, f.y, f.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    },
+  },
+  constellation: {
+    make: (w, h) => Array.from({ length: 42 }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 9, vy: (Math.random() - 0.5) * 9,
+    })),
+    draw(ctx, stars, w, h, dt) {
+      for (const s of stars) {
+        s.x = (s.x + s.vx * dt + w) % w;
+        s.y = (s.y + s.vy * dt + h) % h;
+      }
+      const reach = 130;
+      for (let i = 0; i < stars.length; i++) {
+        for (let j = i + 1; j < stars.length; j++) {
+          const dx = stars[i].x - stars[j].x;
+          const dy = stars[i].y - stars[j].y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < reach) {
+            ctx.strokeStyle = `rgba(169, 158, 240, ${0.14 * (1 - dist / reach)})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(stars[i].x, stars[i].y);
+            ctx.lineTo(stars[j].x, stars[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.fillStyle = "rgba(230, 233, 245, 0.7)";
+      for (const s of stars) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    },
+  },
+};
+
+let canvasThemeCleanup = null;
+
+function applyCanvasTheme(name) {
+  if (canvasThemeCleanup) { canvasThemeCleanup(); canvasThemeCleanup = null; }
+  const spec = CANVAS_THEMES[name];
+  if (!spec) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.id = "theme-canvas";
+  canvas.setAttribute("aria-hidden", "true");
+  document.body.prepend(canvas);
+  const ctx = canvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let particles, raf = 0, last = performance.now(), elapsed = 0;
+
+  const resize = () => {
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    particles = spec.make(window.innerWidth, window.innerHeight);
+  };
+  resize();
+  window.addEventListener("resize", resize);
+
+  const frame = (now) => {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    elapsed += dt;
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    spec.draw(ctx, particles, window.innerWidth, window.innerHeight, dt, elapsed);
+    raf = requestAnimationFrame(frame);
+  };
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    spec.draw(ctx, particles, window.innerWidth, window.innerHeight, 0.016, 1);
+  } else {
+    raf = requestAnimationFrame(frame);
+  }
+
+  canvasThemeCleanup = () => {
+    cancelAnimationFrame(raf);
+    window.removeEventListener("resize", resize);
+    canvas.remove();
+  };
+}
+
 /* ---------- Recommendation list ---------- */
 
 const STATUS_TEXT = {
@@ -386,6 +540,7 @@ async function loadUserPage(slug) {
   currentPage = page;
   $("unlock-panel").hidden = page.owner || Boolean(secret);
   document.body.dataset.theme = page.theme || "cloth";
+  applyCanvasTheme(page.theme);
   $("page-bio").hidden = !page.bio;
   $("page-bio").textContent = page.bio || "";
   $("page-fav").hidden = !page.favourite_book;

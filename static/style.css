@@ -310,6 +310,35 @@ body[data-theme="aurora"]::before {
   to { transform: translateX(3%) skewX(2deg); filter: hue-rotate(40deg); opacity: 0.85; }
 }
 
+/* Canvas themes: palette here, motion rendered by app.js on #theme-canvas */
+body[data-theme="rain"] {
+  --paper: #1a2026; --card: #222a31; --field: #2a343d;
+  --ink: #e4eaee; --ink-soft: #93a3ad; --rule: #33404a;
+  --cloth: #3d7a99; --cloth-dark: #8fc6e0; --stamp: #d0845c;
+}
+body[data-theme="fireflies"] {
+  --paper: #131a12; --card: #1b241a; --field: #232e21;
+  --ink: #e8eee2; --ink-soft: #9cab92; --rule: #2f3c2c;
+  --cloth: #5c8a3a; --cloth-dark: #b6d98a; --stamp: #d0a44c;
+}
+body[data-theme="snow"] {
+  --paper: #1a212e; --card: #222b3a; --field: #2a3547;
+  --ink: #e8edf5; --ink-soft: #9fabc0; --rule: #333f54;
+  --cloth: #4a6d9e; --cloth-dark: #a8c4e8; --stamp: #cf7f56;
+}
+body[data-theme="constellation"] {
+  --paper: #10131f; --card: #171b2b; --field: #1f2438;
+  --ink: #e6e9f5; --ink-soft: #979eb8; --rule: #2a3048;
+  --cloth: #5749a8; --cloth-dark: #a99ef0; --stamp: #d07a63;
+}
+
+#theme-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   body[data-theme]::before,
   body[data-theme]::after {
