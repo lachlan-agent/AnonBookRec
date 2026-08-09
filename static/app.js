@@ -331,8 +331,13 @@ async function loadUserPage(slug) {
   $("page-bio").hidden = !page.bio;
   $("page-bio").textContent = page.bio || "";
   $("page-fav").hidden = !page.favourite_book;
-  $("page-fav").textContent = page.favourite_book
-    ? `Favourite book: ${page.favourite_book}` : "";
+  $("page-fav").replaceChildren();
+  if (page.favourite_book) {
+    $("page-fav").append(
+      el("span", "fav-label", "Favourite book"),
+      el("span", "fav-title", page.favourite_book),
+    );
+  }
 
   if (page.owner) {
     $("page-title").textContent = page.display_name

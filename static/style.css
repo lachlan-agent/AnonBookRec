@@ -431,14 +431,41 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
 .dialog-actions { display: flex; gap: 0.5rem; margin-top: 1.2rem; }
 .dialog-actions #logout { margin-left: auto; }
 
+/* Bio: quiet epigraph under the title */
 .page-bio {
   font-family: var(--serif);
   font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.5;
   color: var(--ink-soft);
   max-width: 34rem;
-  margin: -0.8rem 0 0.4rem;
+  margin: 0.1rem 0 1rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--cloth);
 }
-.page-fav { font-size: 0.85rem; color: var(--cloth-dark); margin: 0 0 0.5rem; }
+
+/* Favourite book: small bookplate chip */
+.page-fav {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  margin: 0 0 0.6rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--card);
+  box-shadow: 0 1px 0 var(--rule);
+}
+.page-fav[hidden] { display: none; }
+.fav-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--cloth-dark);
+  white-space: nowrap;
+}
+.fav-title { font-family: var(--serif); font-style: italic; font-size: 0.98rem; }
 .owner-hint { color: var(--ink-soft); font-size: 0.8rem; margin: 0.3rem 0 0 1.6rem; }
 
 /* Key dialog */
