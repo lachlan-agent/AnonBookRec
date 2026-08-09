@@ -44,7 +44,7 @@ pub fn hash_secret(secret: &str) -> String {
 pub fn verify_secret(secret: &str, stored_hash_hex: &str) -> bool {
     let presented = Sha256::digest(secret.as_bytes());
     let Ok(stored) = hex::decode(stored_hash_hex) else { return false };
-    presented.as_slice().ct_eq(stored.as_slice()).into()
+    presented.ct_eq(stored.as_slice()).into()
 }
 
 fn wrap_key(secret: &str) -> ChaCha20Poly1305 {
