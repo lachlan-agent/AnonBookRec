@@ -154,6 +154,18 @@ async fn page_creation_and_owner_auth() {
 }
 
 #[tokio::test]
+async fn card_page_404s_for_unknown_slug() {
+    let (app, _pool) = test_app().await;
+    let (slug, _) = create_page(&app).await;
+
+    let good = call(&app, "GET", &format!("/u/{slug}"), None, None, None).await;
+    assert_eq!(good.status, StatusCode::OK);
+
+    let bad = call(&app, "GET", "/u/definitely-not-a-slug", None, None, None).await;
+    assert_eq!(bad.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn submit_by_title_and_isbn() {
     let (app, _pool) = test_app().await;
     let (slug, _) = create_page(&app).await;

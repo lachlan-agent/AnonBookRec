@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue, StatusCode};
-use axum::response::Html;
+use axum::response::{Html, IntoResponse};
 use axum::routing::{any, get, patch, post};
 use axum::Router;
 use tower_governor::governor::GovernorConfigBuilder;
@@ -62,12 +62,34 @@ pub fn build_app(state: AppState) -> Router {
     write_api = write_api.layer(no_store);
 
     let static_dir = &state.config.static_dir;
-    let user_page = ServeFile::new(static_dir.join("user.html"));
     let about_page = ServeFile::new(static_dir.join("about.html"));
     // Unknown paths get the styled 404 page with a real 404 status (serving
     // the file directly would answer 200). Read once at startup.
     let not_found_html = std::fs::read_to_string(static_dir.join("404.html"))
         .unwrap_or_else(|_| "<h1>Page not found</h1>".to_string());
+    let user_html = std::fs::read_to_string(static_dir.join("user.html"))
+        .unwrap_or_else(|_| "<h1>missing user.html</h1>".to_string());
+
+    // A card page for a slug that doesn't exist is a 404, not the app shell
+    // with a broken fetch inside it. Check the slug before serving the shell.
+    let user_page = get({
+        let state = state.clone();
+        let user_html = user_html.clone();
+        let not_found_html = not_found_html.clone();
+        move |axum::extract::Path(slug): axum::extract::Path<String>| {
+            let state = state.clone();
+            let user_html = user_html.clone();
+            let not_found_html = not_found_html.clone();
+            async move {
+                match crate::auth::user_by_slug(&state.pool, &slug).await {
+                    Ok(Some(_)) => Html(user_html).into_response(),
+                    Ok(None) => (StatusCode::NOT_FOUND, Html(not_found_html)).into_response(),
+                    Err(err) => err.into_response(),
+                }
+            }
+        }
+    });
+
     let not_found_page = any(move || {
         let html = not_found_html.clone();
         async move { (StatusCode::NOT_FOUND, Html(html)) }
@@ -77,7 +99,7 @@ pub fn build_app(state: AppState) -> Router {
     let mut app = Router::new()
         .merge(read_api)
         .merge(write_api)
-        .route_service("/u/{slug}", user_page)
+        .route("/u/{slug}", user_page)
         .route_service("/about", about_page)
         .fallback_service(static_files)
         .layer(DefaultBodyLimit::max(4096))
