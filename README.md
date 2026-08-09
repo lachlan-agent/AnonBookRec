@@ -100,13 +100,14 @@ WantedBy=multi-user.target
 |---|---|---|---|
 | POST | `/api/users` | — | Make a page. The result is `{slug, secret, url}`. The system shows the secret one time only |
 | GET | `/api/pages/{slug}` | optional bearer | Get the public recommendations. The owner also gets the sealed recommendations, in decrypted form |
-| PATCH | `/api/pages/{slug}` | bearer | Set `default_public` and/or the optional `display_name`. The name is not a part of the URL |
+| PATCH | `/api/pages/{slug}` | bearer | Set `default_public` and/or the optional profile fields (`display_name`, `bio`, `favourite_book`, `theme`). The name is not a part of the URL |
 | GET | `/api/search?q=` | — | Get typeahead suggestions (title, author, year, ISBN, cover id) |
 | POST | `/api/pages/{slug}/recommendations` | — | Send `{book_name}` (a title or an ISBN). The system validates the book. Then it inserts a row or increases the counter |
-| GET | `/api/global` | — | Get the open shelf (the global public board) |
-| POST | `/api/global/recommendations` | — | Recommend a book without a page |
+| POST | `/api/pages/{slug}/rotate-key` | bearer | Make a new secret. The result is `{secret}`, shown one time only. The old secret stops working at once. The sealed recommendations stay readable, because the page keypair does not change |
+| GET | `/api/pages/{slug}/qr.svg` | — | Get a QR code (SVG) of the share URL of the page |
 | PATCH | `/api/recommendations/{id}` | bearer | Change `read` or `is_public`. This seals the recommendation or shows it |
 | DELETE | `/api/recommendations/{id}` | bearer | Remove spam |
+| DELETE | `/api/pages/{slug}` | bearer | Delete the page and all attached data permanently |
 
 The owner authorization is `Authorization: Bearer <secret>`. The system compares
 the secret with the stored hash in constant time.

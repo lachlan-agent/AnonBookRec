@@ -39,7 +39,14 @@
              aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <button id="copy-share" class="button small" type="button">Copy share link</button>
+    <div class="share-row">
+      <button id="copy-share" class="button small" type="button">Copy share link</button>
+      <button id="show-qr" class="button small" type="button">Show QR code</button>
+    </div>
+    <div id="qr-wrap" class="qr-wrap" hidden>
+      <img id="qr-image" class="qr-image" alt="QR code linking to this page"
+           width="240" height="240">
+    </div>
     <label class="owner-toggle">
       <input id="default-public" type="checkbox">
       Show new recommendations publicly
@@ -86,6 +93,16 @@
     </div>
     <div class="danger-zone">
       <p class="owner-hint danger-hint">
+        Generating a new key invalidates your current key immediately and signs
+        out every other device. Private recommendations stay readable with the
+        new key. The new key is shown exactly once.
+      </p>
+      <button id="rotate-key" class="button small danger" type="button">
+        Generate new key
+      </button>
+    </div>
+    <div class="danger-zone">
+      <p class="owner-hint danger-hint">
         Deleting your page permanently removes the account, every
         recommendation, and every note. There is no undo and no recovery.
       </p>
@@ -93,6 +110,30 @@
         Delete page &amp; all data
       </button>
     </div>
+  </dialog>
+
+  <dialog id="new-key-dialog" class="key-dialog">
+    <h2>Your new secret key</h2>
+    <p class="key-label">
+      Your old key no longer works. This is the only time the new key is shown:
+    </p>
+    <div class="key-row">
+      <code id="new-secret-key"></code>
+      <button class="button small" data-copy="new-secret-key" type="button">Copy</button>
+    </div>
+    <div class="key-warning">
+      <p>
+        There is no account and no email, so this key is now the only way to
+        manage your page and read private recommendations. It cannot be
+        recovered or reset. Save it somewhere safe before you continue.
+      </p>
+      <button id="download-new-key" class="button small" type="button">Download key file</button>
+    </div>
+    <label class="key-confirm">
+      <input id="new-key-saved" type="checkbox">
+      I definitely saved my new secret key somewhere safe
+    </label>
+    <button id="new-key-done" class="button primary" disabled type="button">Done</button>
   </dialog>
 
   <section class="shelf">

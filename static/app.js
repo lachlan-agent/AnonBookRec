@@ -42,6 +42,17 @@ function setStatus(message, isError = false) {
 
 const showError = (err) => setStatus(err.message, true);
 
+function wireCopyButtons() {
+  document.querySelectorAll("[data-copy]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await navigator.clipboard.writeText($(button.dataset.copy).textContent);
+      const original = button.textContent;
+      button.textContent = "Copied";
+      setTimeout(() => { button.textContent = original; }, 1200);
+    });
+  });
+}
+
 /* ---------- Recommendation list ---------- */
 
 const STATUS_TEXT = {
@@ -198,7 +209,8 @@ function wireSubmitForm(submitUrl, reload) {
         method: "POST",
         body: JSON.stringify({ book_name: bookName, note: note || null }),
       });
-      setStatus(STATUS_TEXT[result.status](result.book));
+      const describe = STATUS_TEXT[result.status] || ((book) => `“${book.title}” recorded.`);
+      setStatus(describe(result.book));
       input.value = "";
       hideConfirm();
       hideDropdown();
@@ -304,14 +316,7 @@ function initIndex() {
     if (createdPage) window.location.href = `/u/${createdPage.slug}`;
   });
 
-  document.querySelectorAll("[data-copy]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      await navigator.clipboard.writeText($(button.dataset.copy).textContent);
-      const original = button.textContent;
-      button.textContent = "Copied";
-      setTimeout(() => { button.textContent = original; }, 1200);
-    });
-  });
+  wireCopyButtons();
 }
 
 /* ---------- User page ---------- */
@@ -378,6 +383,8 @@ function initUser() {
   wireSubmitForm(`/api/pages/${encodeURIComponent(slug)}/recommendations`,
     () => loadUserPage(slug));
 
+  wireCopyButtons();
+
   $("open-settings").addEventListener("click", () => {
     $("settings-dialog").showModal();
   });
@@ -391,6 +398,68 @@ function initUser() {
     button.textContent = "Link copied";
     setTimeout(() => { button.textContent = "Copy share link"; }, 1200);
   });
+
+  // Server-rendered QR of the share link, loaded on first use.
+  $("show-qr").addEventListener("click", () => {
+    const wrap = $("qr-wrap");
+    const image = $("qr-image");
+    if (!image.src) image.src = `/api/pages/${encodeURIComponent(slug)}/qr.svg`;
+    wrap.hidden = !wrap.hidden;
+    $("show-qr").textContent = wrap.hidden ? "Show QR code" : "Hide QR code";
+  });
+
+  // Key rotation: two-step like deletion. The server invalidates the old key
+  // atomically; the new one is stored locally and shown exactly once.
+  let rotateArmTimer = null;
+  let rotatedSecret = null;
+  $("rotate-key").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (!button.dataset.armed) {
+      button.dataset.armed = "1";
+      button.textContent = "Click again to invalidate the old key";
+      rotateArmTimer = setTimeout(() => {
+        delete button.dataset.armed;
+        button.textContent = "Generate new key";
+      }, 5000);
+      return;
+    }
+    clearTimeout(rotateArmTimer);
+    delete button.dataset.armed;
+    button.textContent = "Generate new key";
+    try {
+      const result = await api(`/api/pages/${encodeURIComponent(slug)}/rotate-key`, {
+        method: "POST",
+        headers: bearer(secret),
+      });
+      rotatedSecret = result.secret;
+      localStorage.setItem(`abr_secret_${slug}`, rotatedSecret);
+      $("new-secret-key").textContent = rotatedSecret;
+      $("settings-dialog").close();
+      $("new-key-dialog").showModal();
+    } catch (err) {
+      $("settings-dialog").close();
+      showError(err);
+    }
+  });
+
+  $("download-new-key").addEventListener("click", () => {
+    if (!rotatedSecret) return;
+    const blob = new Blob(
+      [`Anonymous Book Recommendation page: ${window.location.origin}/u/${slug}\nSecret key: ${rotatedSecret}\n\nKeep this file private. The key cannot be recovered.\n`],
+      { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `anonbookrec-key-${slug}.txt`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+  $("new-key-saved").addEventListener("change", (event) => {
+    $("new-key-done").disabled = !event.target.checked;
+  });
+  $("new-key-done").addEventListener("click", () => $("new-key-dialog").close());
+  // However the dialog closes (Done or Esc), reload so every handler picks up
+  // the new key; it is already saved in localStorage.
+  $("new-key-dialog").addEventListener("close", () => window.location.reload());
 
   $("unlock-form").addEventListener("submit", async (event) => {
     event.preventDefault();
