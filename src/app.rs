@@ -16,7 +16,6 @@ use crate::state::AppState;
 pub fn build_app(state: AppState) -> Router {
     let read_api = Router::new()
         .route("/api/pages/{slug}", get(users::get_page))
-        .route("/api/global", get(recommendations::get_global))
         .route("/api/search", get(recommendations::search));
 
     // Mutating routes carry the per-IP rate limit.
@@ -24,7 +23,6 @@ pub fn build_app(state: AppState) -> Router {
         .route("/api/users", post(users::create_page))
         .route("/api/pages/{slug}", patch(users::patch_page))
         .route("/api/pages/{slug}/recommendations", post(recommendations::submit_to_page))
-        .route("/api/global/recommendations", post(recommendations::submit_global))
         .route(
             "/api/recommendations/{id}",
             patch(recommendations::patch_rec).delete(recommendations::delete_rec),
@@ -42,12 +40,14 @@ pub fn build_app(state: AppState) -> Router {
 
     let static_dir = &state.config.static_dir;
     let user_page = ServeFile::new(static_dir.join("user.html"));
+    let about_page = ServeFile::new(static_dir.join("about.html"));
     let static_files = ServeDir::new(static_dir);
 
     Router::new()
         .merge(read_api)
         .merge(write_api)
         .route_service("/u/{slug}", user_page)
+        .route_service("/about", about_page)
         .fallback_service(static_files)
         .layer(DefaultBodyLimit::max(4096))
         .layer(SetResponseHeaderLayer::if_not_present(

@@ -285,15 +285,7 @@ function wireSubmitForm(submitUrl, reload) {
 
 /* ---------- Landing page ---------- */
 
-async function loadGlobal() {
-  const recommendations = await api("/api/global");
-  renderList(recommendations, {});
-}
-
 function initIndex() {
-  loadGlobal().catch(showError);
-  wireSubmitForm("/api/global/recommendations", loadGlobal);
-
   const lastSlug = localStorage.getItem("abr_last_slug");
   if (lastSlug && localStorage.getItem(`abr_secret_${lastSlug}`)) {
     $("returning").hidden = false;

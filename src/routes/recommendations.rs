@@ -152,12 +152,6 @@ pub async fn search(
     Ok(Json(suggestions))
 }
 
-pub async fn get_global(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<RecommendationView>>, AppError> {
-    Ok(Json(load_recommendations(&state.pool, None, None).await?))
-}
-
 #[derive(Deserialize)]
 pub struct SubmitBody {
     pub book_name: String,
@@ -173,14 +167,6 @@ pub async fn submit_to_page(
 ) -> Result<(CookieJar, Json<serde_json::Value>), AppError> {
     let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
     submit(state, Some(user), jar, body).await
-}
-
-pub async fn submit_global(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Json(body): Json<SubmitBody>,
-) -> Result<(CookieJar, Json<serde_json::Value>), AppError> {
-    submit(state, None, jar, body).await
 }
 
 async fn submit(

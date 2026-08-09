@@ -319,27 +319,6 @@ async fn owner_can_toggle_visibility_read_and_delete() {
 }
 
 #[tokio::test]
-async fn global_board_visit_and_submit() {
-    let (app, _pool) = test_app().await;
-
-    let submitted = call(&app, "POST", "/api/global/recommendations",
-        Some(json!({"book_name": "The Dispossessed"})), None, None).await;
-    assert_eq!(submitted.status, StatusCode::OK);
-    assert_eq!(submitted.body["status"], json!("created"));
-
-    let board = call(&app, "GET", "/api/global", None, None, None).await;
-    let recs = board.body.as_array().unwrap();
-    assert_eq!(recs.len(), 1);
-    assert_eq!(recs[0]["book_name"], json!("The Dispossessed"));
-
-    // Global rows have no owner: nobody can patch or delete them.
-    let rec_id = recs[0]["id"].as_i64().unwrap();
-    let patched = call(&app, "PATCH", &format!("/api/recommendations/{rec_id}"),
-        Some(json!({"read": true})), Some("anything"), None).await;
-    assert_eq!(patched.status, StatusCode::NOT_FOUND);
-}
-
-#[tokio::test]
 async fn submitter_notes_follow_recommendation_visibility() {
     let (app, pool) = test_app().await;
     let (slug, secret) = create_page(&app).await;

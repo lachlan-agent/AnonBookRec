@@ -21,55 +21,24 @@
       its ISBN, so only real books make it onto your card.
     </p>
     <button id="create-page" class="button primary">Create your page</button>
+    <p id="form-status" class="status" role="status"></p>
     <p id="returning" class="returning" hidden>
       Or return to <a id="returning-link" href="/">your page</a>.
     </p>
-  </section>
-
-  <section class="shelf">
-    <div class="card-head">
-      <h2>The open shelf</h2>
-      <span class="card-note">recommendations from everyone, to everyone</span>
-    </div>
-    <form id="recommend-form" class="recommend-form">
-      <div class="search-wrap">
-        <input id="book-input" name="book" type="text" maxlength="256" required
-               placeholder="A book title or ISBN" autocomplete="off"
-               role="combobox" aria-expanded="false" aria-controls="suggestions">
-        <ul id="suggestions" class="suggestions" role="listbox" hidden></ul>
-      </div>
-      <button class="button primary" type="submit">Recommend</button>
-    </form>
-    <div id="confirm-card" class="confirm-card" hidden>
-      <img id="confirm-cover" class="confirm-cover" alt="Book cover" hidden>
-      <div class="confirm-info">
-        <span id="confirm-title" class="rec-title"></span>
-        <span id="confirm-author" class="confirm-author"></span>
-        <span id="confirm-isbn" class="rec-isbn"></span>
-        <textarea id="book-note" class="confirm-note" maxlength="500" rows="2"
-                  placeholder="Add a note (optional) — “I think you’ll enjoy this because…”"></textarea>
-      </div>
-      <div class="confirm-actions">
-        <button id="confirm-submit" class="button primary small" type="button">Recommend this book</button>
-        <button id="confirm-cancel" class="button small" type="button">Not this one</button>
-      </div>
-    </div>
-    <p id="form-status" class="status" role="status"></p>
-    <ol id="rec-list" class="card-list" aria-label="Recommended books"></ol>
-    <p id="empty-shelf" class="empty" hidden>
-      The shelf is empty. Recommend the first book.
+    <p class="returning">
+      New here? <a href="/about">How it works</a>.
     </p>
   </section>
 </main>
 
 <dialog id="key-dialog" class="key-dialog">
   <h2>Your page is ready</h2>
-  <p class="key-label">Share this link — anyone can recommend you a book:</p>
+  <p class="key-label">Share this link:</p>
   <div class="key-row">
     <code id="page-url"></code>
     <button class="button small" data-copy="page-url" type="button">Copy</button>
   </div>
-  <p class="key-label">Your secret key — this is how you get back in:</p>
+  <p class="key-label">Your secret key. This is how you get back in:</p>
   <div class="key-row">
     <code id="secret-key"></code>
     <button class="button small" data-copy="secret-key" type="button">Copy</button>
@@ -84,13 +53,13 @@
   </div>
   <label class="key-confirm">
     <input id="key-saved" type="checkbox">
-    I saved my secret key somewhere safe
+    I definitely saved my secret key somewhere safe
   </label>
   <button id="go-to-page" class="button primary" disabled type="button">Go to my page</button>
 </dialog>
 
 <footer class="site-footer">
-  <p>No accounts. No tracking. Books only.</p>
+  <p>No accounts. No nonsense. Books only.</p>
 </footer>
 </body>
 </html>
