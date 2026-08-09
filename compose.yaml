@@ -1,6 +1,7 @@
 services:
   app:
     build: .
+    image: anonbookrec:latest
     restart: unless-stopped
     environment:
       # Set your real domain here (or in a .env file next to this compose file).
