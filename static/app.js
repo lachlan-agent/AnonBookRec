@@ -358,6 +358,25 @@ function pageSlug() {
 /* Latest page state, for handlers that need more than the slug. */
 let currentPage = null;
 
+async function refreshQr(slug, secret, page) {
+  try {
+    const response = await fetch(`/api/pages/${encodeURIComponent(slug)}/qr.svg`, {
+      headers: secret ? bearer(secret) : {},
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error();
+    const svg = await response.text();
+    $("qr-image").src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    $("qr-note").textContent = page.is_hidden
+      ? (page.share_token
+          ? "QR points to your friend link."
+          : "QR points to your page's normal address — while hidden, only you can open it. Create a friend link to make the QR shareable.")
+      : "QR points to your public page link.";
+  } catch {
+    $("qr-note").textContent = "Couldn't load the QR code.";
+  }
+}
+
 async function loadUserPage(slug) {
   const secret = localStorage.getItem(`abr_secret_${slug}`);
   const page = await api(`/api/pages/${encodeURIComponent(slug)}`, {
@@ -408,6 +427,11 @@ async function loadUserPage(slug) {
       localStorage.setItem(`abr_secret_${page.handle}`, secret);
       localStorage.setItem("abr_last_slug", page.handle);
     }
+    // The QR always shows in settings and tracks whatever the server would
+    // share right now: friend link while hidden (with one minted), the
+    // normal page link otherwise. Bearer fetch: img tags can't authenticate
+    // against a hidden page's canonical URL.
+    refreshQr(slug, secret, page);
     $("account-current").textContent = page.username
       ? `Current username: ${page.username}.` : "No username set yet.";
     if (document.activeElement !== $("account-username")) {
@@ -517,7 +541,11 @@ function initUser() {
   // QR: fetch the server-rendered SVG, rasterize to PNG on a canvas.
   // data: URI keeps the CSP happy (blob: isn't in img-src).
   async function qrPngBlob() {
-    const response = await fetch(`/api/pages/${encodeURIComponent(slug)}/qr.svg`);
+    const ownSecret = localStorage.getItem(`abr_secret_${pageSlug()}`);
+    const response = await fetch(`/api/pages/${encodeURIComponent(slug)}/qr.svg`, {
+      headers: ownSecret ? bearer(ownSecret) : {},
+      cache: "no-store",
+    });
     if (!response.ok) throw new Error("could not fetch the QR code");
     const svg = await response.text();
     const img = new Image();
@@ -579,14 +607,6 @@ function initUser() {
     }
   });
 
-  // Server-rendered QR of the share link, loaded on first use.
-  $("show-qr").addEventListener("click", () => {
-    const wrap = $("qr-wrap");
-    const image = $("qr-image");
-    if (!image.src) image.src = `/api/pages/${encodeURIComponent(slug)}/qr.svg`;
-    wrap.hidden = !wrap.hidden;
-    $("show-qr").textContent = wrap.hidden ? "Show QR code" : "Hide QR code";
-  });
 
   // Key rotation: two-step like deletion. The server invalidates the old key
   // atomically; the new one is stored locally and shown exactly once.

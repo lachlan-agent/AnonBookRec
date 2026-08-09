@@ -41,16 +41,14 @@
       </button>
     </div>
     <div class="share-row">
-      <div class="share-row">
       <button id="copy-share" class="button small" type="button">Copy share link</button>
       <button id="copy-qr" class="button small" type="button">Copy QR code</button>
       <button id="download-qr" class="button small" type="button">Download QR</button>
     </div>
-      <button id="show-qr" class="button small" type="button">Show QR code</button>
-    </div>
-    <div id="qr-wrap" class="qr-wrap" hidden>
+    <div id="qr-wrap" class="qr-wrap">
       <img id="qr-image" class="qr-image" alt="QR code linking to this page"
            width="240" height="240">
+      <p id="qr-note" class="owner-hint"></p>
     </div>
     <label class="owner-toggle">
       <input id="default-public" type="checkbox">
