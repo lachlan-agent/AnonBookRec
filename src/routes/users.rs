@@ -132,7 +132,7 @@ pub async fn get_page(
 pub const THEMES: &[&str] = &[
     "cloth", "ink", "plum", "amber", "night", "midnight", "noir", "garnet", "forest", "cosmos",
     "prism", "manuscript", "blueprint", "ocean", "ember", "sakura", "aurora", "rain", "fireflies",
-    "snow", "constellation", "matrix", "koi", "lava", "flock",
+    "snow", "constellation", "matrix", "koi", "lava", "flock", "flock-glass",
 ];
 
 #[derive(Deserialize)]

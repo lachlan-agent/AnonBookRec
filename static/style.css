@@ -353,6 +353,32 @@ body[data-theme="flock"] {
   --cloth: #b0522f; --cloth-dark: #8a3c20; --stamp: #b3543f;
 }
 
+/* Paper birds — glass: same flock canvas, but the panels go translucent and
+   frost whatever flies behind them. */
+body[data-theme="flock-glass"] {
+  --paper: #f2efe6; --card: rgba(255, 255, 255, 0.55); --field: rgba(255, 255, 255, 0.72);
+  --ink: #2a2a28; --ink-soft: #6f6d66; --rule: rgba(90, 85, 70, 0.22);
+  --cloth: #b0522f; --cloth-dark: #8a3c20; --stamp: #b3543f;
+}
+body[data-theme="flock-glass"] .shelf,
+body[data-theme="flock-glass"] .key-dialog,
+body[data-theme="flock-glass"] .suggestions,
+body[data-theme="flock-glass"] .confirm-card,
+body[data-theme="flock-glass"] .page-fav,
+body[data-theme="flock-glass"] .unlock-panel[open] {
+  backdrop-filter: blur(9px) saturate(1.15);
+  -webkit-backdrop-filter: blur(9px) saturate(1.15);
+}
+body[data-theme="flock-glass"] .shelf {
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 10px 34px rgba(40, 38, 30, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+body[data-theme="flock-glass"] .key-dialog {
+  border-color: rgba(255, 255, 255, 0.65);
+  background: rgba(252, 250, 245, 0.72);
+}
+body[data-theme="flock-glass"] .key-dialog::backdrop { background: rgba(60, 56, 46, 0.25); }
+
 #theme-canvas {
   position: fixed;
   inset: 0;

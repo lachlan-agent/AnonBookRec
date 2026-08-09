@@ -368,6 +368,9 @@ CANVAS_THEMES.flock = {
   },
 };
 
+/* Glass variant flies the same flock behind frosted panels. */
+CANVAS_THEMES["flock-glass"] = CANVAS_THEMES.flock;
+
 let canvasThemeCleanup = null;
 
 function applyCanvasTheme(name) {
