@@ -1,6 +1,6 @@
 # Deployment plan — Docker Compose + Caddy (auto-HTTPS)
 
-Target: any Docker host (VPS or home server) with a domain pointed at it.
+Target: **DigitalOcean droplet** (any Docker host works the same).
 Stack: the app container (single Rust binary + SQLite volume) behind a Caddy
 container that terminates TLS with automatic Let's Encrypt certificates.
 
@@ -28,19 +28,24 @@ internet ──443/80──> caddy (auto-TLS, gzip, X-Forwarded-For)
 | `compose.yaml` | `app` + `caddy` services, named volumes for DB and certificates |
 | `deploy/Caddyfile` | Two-liner vhost: `{$DOMAIN} { reverse_proxy app:8080 }` |
 
-## Rollout steps
+## Rollout steps (DigitalOcean)
 
-1. **DNS**: `A` (and `AAAA` if you have IPv6) record for your domain → server IP.
-   Low TTL (300) while setting up.
-2. **Server prep**: install Docker + compose plugin; open ports 80 and 443
-   (and nothing else app-related — 8080 stays internal to the compose network).
-3. **Deploy**:
+1. **Droplet**: create from the Marketplace **"Docker on Ubuntu"** image
+   (Docker + compose preinstalled) — Basic / Regular, $6/mo (1 vCPU, 1 GB,
+   25 GB) is plenty. Pick the region nearest your readers. Add your SSH key;
+   disable password login.
+2. **Firewall**: DigitalOcean Cloud Firewall (or `ufw`) allowing inbound
+   22, 80, 443 only — 8080 stays internal to the compose network.
+3. **DNS**: `A` record (and `AAAA` if the droplet has IPv6) for your domain →
+   droplet IP. Either at your registrar or via DO's DNS (point nameservers at
+   `ns1–3.digitalocean.com`). Low TTL (300) while setting up.
+4. **Deploy** (as root or a docker-group user on the droplet):
    ```sh
    git clone <repo> && cd AnonBookRec
    echo "DOMAIN=books.example.com" > .env
    docker compose up -d --build
    ```
-4. **Verify**:
+5. **Verify**:
    - `https://$DOMAIN` loads with a valid certificate (Caddy fetches it on
      first request; allow ~30 s).
    - Create a page, submit a book, check the sealed flow with the key.
@@ -74,5 +79,6 @@ internet ──443/80──> caddy (auto-TLS, gzip, X-Forwarded-For)
 ## Possible later steps (not in scope now)
 
 - CI: GitHub Actions building/pushing the image, `docker compose pull` deploys.
-- Litestream/S3 continuous DB replication.
+- DO weekly droplet snapshots ($1.20/mo extra) as a coarse second backup layer.
+- Litestream continuous DB replication to DO Spaces (S3-compatible).
 - `fail2ban`-style abuse handling if the built-in rate limit proves too soft.
