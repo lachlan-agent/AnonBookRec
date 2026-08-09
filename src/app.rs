@@ -21,7 +21,7 @@ pub fn build_app(state: AppState) -> Router {
     // Mutating routes carry the per-IP rate limit.
     let mut write_api = Router::new()
         .route("/api/users", post(users::create_page))
-        .route("/api/pages/{slug}", patch(users::patch_page))
+        .route("/api/pages/{slug}", patch(users::patch_page).delete(users::delete_page))
         .route("/api/pages/{slug}/recommendations", post(recommendations::submit_to_page))
         .route(
             "/api/recommendations/{id}",

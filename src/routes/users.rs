@@ -171,3 +171,19 @@ pub async fn patch_page(
 
     Ok(Json(json!({ "ok": true })))
 }
+
+/// Permanently delete the page and everything attached to it (owner only).
+/// Recommendations and votes go with it via ON DELETE CASCADE.
+pub async fn delete_page(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    auth::require_owner(&user, &headers)?;
+    sqlx::query("DELETE FROM users WHERE id = ?")
+        .bind(user.id)
+        .execute(&state.pool)
+        .await?;
+    Ok(Json(json!({ "ok": true })))
+}

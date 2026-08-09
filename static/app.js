@@ -415,6 +415,37 @@ function initUser() {
     window.location.reload();
   });
 
+  // Deleting is two-step: first click arms the button, second click within
+  // 5 seconds actually deletes.
+  let deleteArmTimer = null;
+  $("delete-account").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (!button.dataset.armed) {
+      button.dataset.armed = "1";
+      button.textContent = "Click again to permanently delete";
+      deleteArmTimer = setTimeout(() => {
+        delete button.dataset.armed;
+        button.textContent = "Delete page & all data";
+      }, 5000);
+      return;
+    }
+    clearTimeout(deleteArmTimer);
+    try {
+      await api(`/api/pages/${encodeURIComponent(slug)}`, {
+        method: "DELETE",
+        headers: bearer(secret),
+      });
+      localStorage.removeItem(`abr_secret_${slug}`);
+      if (localStorage.getItem("abr_last_slug") === slug) {
+        localStorage.removeItem("abr_last_slug");
+      }
+      window.location.href = "/";
+    } catch (err) {
+      $("settings-dialog").close();
+      showError(err);
+    }
+  });
+
   // The public profile only exists for public pages.
   $("default-public").addEventListener("change", (event) => {
     $("profile-fields").disabled = !event.target.checked;

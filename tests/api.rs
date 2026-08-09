@@ -441,6 +441,37 @@ async fn profile_only_shown_for_public_pages() {
 }
 
 #[tokio::test]
+async fn account_deletion_requires_owner_and_removes_everything() {
+    let (app, pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    let page_url = format!("/api/pages/{slug}");
+
+    call(&app, "POST", &format!("{page_url}/recommendations"),
+        Some(json!({"book_name": "The Dispossessed", "note": "gone soon"})), None, None).await;
+
+    let denied = call(&app, "DELETE", &page_url, None, None, None).await;
+    assert_eq!(denied.status, StatusCode::UNAUTHORIZED);
+    let denied = call(&app, "DELETE", &page_url, None, Some("wrong"), None).await;
+    assert_eq!(denied.status, StatusCode::UNAUTHORIZED);
+
+    let deleted = call(&app, "DELETE", &page_url, None, Some(&secret), None).await;
+    assert_eq!(deleted.status, StatusCode::OK);
+
+    let gone = call(&app, "GET", &page_url, None, Some(&secret), None).await;
+    assert_eq!(gone.status, StatusCode::NOT_FOUND);
+
+    // Cascade wiped every trace.
+    let (users, recs, votes): (i64, i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM users),
+                (SELECT count(*) FROM recommendations),
+                (SELECT count(*) FROM recommendation_votes)")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!((users, recs, votes), (0, 0, 0));
+}
+
+#[tokio::test]
 async fn search_returns_suggestions_with_metadata() {
     let (app, _pool) = test_app().await;
 

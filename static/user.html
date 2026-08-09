@@ -72,23 +72,31 @@
       <div class="settings-field">
         <label for="bio">Bio</label>
         <textarea id="bio" maxlength="500" rows="3"
-                  placeholder="A line about you or your taste in books"></textarea>
+                  placeholder="Whatever you want really."></textarea>
       </div>
       <div class="settings-field">
         <label for="favourite-book">Favourite book</label>
         <input id="favourite-book" type="text" maxlength="256"
-               placeholder="The one you press into people's hands">
+               placeholder="The best book in the world">
       </div>
     </fieldset>
     <div class="dialog-actions">
       <button id="save-settings" class="button primary small" type="button">Save settings</button>
       <button id="logout" class="button small danger" type="button">Sign out</button>
     </div>
+    <div class="danger-zone">
+      <p class="owner-hint danger-hint">
+        Deleting your page permanently removes the account, every
+        recommendation, and every note. There is no undo and no recovery.
+      </p>
+      <button id="delete-account" class="button small danger" type="button">
+        Delete page &amp; all data
+      </button>
+    </div>
   </dialog>
 
   <section class="shelf">
     <div class="card-head">
-      <h2 id="shelf-title">The card</h2>
       <span class="card-note" id="shelf-note"></span>
     </div>
     <form id="recommend-form" class="recommend-form">
@@ -107,7 +115,7 @@
         <span id="confirm-author" class="confirm-author"></span>
         <span id="confirm-isbn" class="rec-isbn"></span>
         <textarea id="book-note" class="confirm-note" maxlength="500" rows="2"
-                  placeholder="Add a note (optional) — “I think you’ll enjoy this because…”"></textarea>
+                  placeholder="Add a note (optional): “I think you’ll enjoy this because…”"></textarea>
       </div>
       <div class="confirm-actions">
         <button id="confirm-submit" class="button primary small" type="button">Recommend this book</button>
