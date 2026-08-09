@@ -35,7 +35,7 @@ fn valid_isbn10(isbn: &str) -> bool {
         let value = if c == 'X' { 10 } else { c.to_digit(10).unwrap_or(0) };
         acc + value * (10 - i as u32)
     });
-    sum % 11 == 0
+    sum.is_multiple_of(11)
 }
 
 fn valid_isbn13(isbn: &str) -> bool {
@@ -43,7 +43,7 @@ fn valid_isbn13(isbn: &str) -> bool {
         let value = c.to_digit(10).unwrap_or(0);
         acc + value * if i % 2 == 0 { 1 } else { 3 }
     });
-    sum % 10 == 0
+    sum.is_multiple_of(10)
 }
 
 fn isbn10_to_13(isbn10: &str) -> String {
