@@ -392,7 +392,7 @@ async function loadUserPage(slug) {
     $("shelf-note").textContent = "your recommendations";
   } else {
     $("page-title").textContent = page.display_name
-      ? `Recommend ${page.display_name} a book`
+      ? `${page.display_name}'s card`
       : "Recommend this reader a book";
     $("shelf-note").textContent = "what others have recommended";
   }
@@ -610,7 +610,7 @@ function initUser() {
       history.replaceState(null, "", `/u/${encodeURIComponent(result.handle)}`);
       $("account-password").value = "";
       button.textContent = "Saved ✓";
-      accountStatus(`You can now sign in as “${result.handle}” — your page lives at /u/${result.handle}.`);
+      accountStatus(`You can now sign in as “${result.handle}”.  Your page lives at /u/${result.handle}.`);
       setStatus(`Password login enabled for ${result.handle}.`);
       await loadUserPage(pageSlug());
       setTimeout(() => { button.textContent = "Set username & password"; }, 2000);
