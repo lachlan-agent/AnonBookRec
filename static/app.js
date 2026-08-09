@@ -504,6 +504,16 @@ function initUser() {
 
   $("create-share-link").addEventListener("click", async () => {
     try {
+      // The hide checkbox may be ticked but not yet saved; persist it first
+      // so the reload doesn't revert the checkbox and the QR switches to the
+      // friend link.
+      if ($("hide-page").checked !== Boolean(currentPage?.is_hidden)) {
+        await api(`/api/pages/${encodeURIComponent(slug)}`, {
+          method: "PATCH",
+          headers: bearer(secret),
+          body: JSON.stringify({ is_hidden: $("hide-page").checked }),
+        });
+      }
       await api(`/api/pages/${encodeURIComponent(slug)}/share-link`, {
         method: "POST",
         headers: bearer(secret),
