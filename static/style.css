@@ -124,6 +124,83 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   color: var(--ink);
 }
 
+/* Typeahead */
+.search-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
+.search-wrap input { width: 100%; }
+.suggestions {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  box-shadow: 0 4px 14px rgba(34, 38, 43, 0.12);
+  max-height: 19rem;
+  overflow-y: auto;
+}
+.suggestion {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.4rem 0.5rem;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.suggestion:hover, .suggestion.active { background: rgba(46, 94, 78, 0.1); }
+.suggestion-cover {
+  width: 2rem;
+  height: 2.9rem;
+  object-fit: cover;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--paper);
+  flex-shrink: 0;
+}
+.suggestion-text { display: flex; flex-direction: column; min-width: 0; }
+.suggestion-title {
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.suggestion-author { font-size: 0.78rem; color: var(--ink-soft); }
+
+/* Confirmation card */
+.confirm-card {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  border: 1px solid var(--cloth);
+  border-radius: 4px;
+  background: rgba(46, 94, 78, 0.05);
+  padding: 0.8rem 1rem;
+  margin-top: 0.8rem;
+}
+.confirm-card[hidden] { display: none; }
+.confirm-cover {
+  width: 3.4rem;
+  height: 5rem;
+  object-fit: cover;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.confirm-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.confirm-author { font-size: 0.85rem; color: var(--ink-soft); }
+.confirm-actions {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
 .status { min-height: 1.3rem; font-size: 0.88rem; color: var(--cloth-dark); margin: 0.4rem 0 0; }
 .status.error { color: var(--stamp); }
 

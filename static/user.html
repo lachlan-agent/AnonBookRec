@@ -42,10 +42,26 @@
       <span class="card-note" id="shelf-note"></span>
     </div>
     <form id="recommend-form" class="recommend-form">
-      <input id="book-input" name="book" type="text" maxlength="256" required
-             placeholder="A book title or ISBN" autocomplete="off">
+      <div class="search-wrap">
+        <input id="book-input" name="book" type="text" maxlength="256" required
+               placeholder="A book title or ISBN" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="suggestions">
+        <ul id="suggestions" class="suggestions" role="listbox" hidden></ul>
+      </div>
       <button class="button primary" type="submit">Recommend</button>
     </form>
+    <div id="confirm-card" class="confirm-card" hidden>
+      <img id="confirm-cover" class="confirm-cover" alt="Book cover" hidden>
+      <div class="confirm-info">
+        <span id="confirm-title" class="rec-title"></span>
+        <span id="confirm-author" class="confirm-author"></span>
+        <span id="confirm-isbn" class="rec-isbn"></span>
+      </div>
+      <div class="confirm-actions">
+        <button id="confirm-submit" class="button primary small" type="button">Recommend this book</button>
+        <button id="confirm-cancel" class="button small" type="button">Not this one</button>
+      </div>
+    </div>
     <p id="form-status" class="status" role="status"></p>
     <ol id="rec-list" class="card-list" aria-label="Recommended books"></ol>
     <p id="empty-shelf" class="empty" hidden>

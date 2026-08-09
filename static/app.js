@@ -110,21 +110,167 @@ function ownerControls(rec, secret, slug) {
 
 const showError = (err) => setStatus(err.message, true);
 
+/* Typeahead + confirmation. Nothing is submitted until the person confirms a
+   specific edition (title, author, cover), so the wrong book can't slip in. */
 function wireSubmitForm(submitUrl, reload) {
-  $("recommend-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const input = $("book-input");
-    const name = input.value.trim();
-    if (!name) return;
-    setStatus("Checking the catalogue…");
+  const input = $("book-input");
+  const dropdown = $("suggestions");
+  const card = $("confirm-card");
+  let debounceTimer = null;
+  let suggestions = [];
+  let activeIndex = -1;
+  let selected = null;
+
+  const looksLikeIsbn = (text) => /^[0-9\-\s]{10,17}[0-9Xx]?$/.test(text);
+  const coverUrl = (book, size) =>
+    book.cover_id
+      ? `https://covers.openlibrary.org/b/id/${book.cover_id}-${size}.jpg`
+      : `https://covers.openlibrary.org/b/isbn/${book.isbn13}-${size}.jpg`;
+
+  function hideDropdown() {
+    dropdown.hidden = true;
+    dropdown.replaceChildren();
+    input.setAttribute("aria-expanded", "false");
+    activeIndex = -1;
+  }
+
+  function hideConfirm() {
+    card.hidden = true;
+    selected = null;
+  }
+
+  function showConfirm(book) {
+    selected = book;
+    hideDropdown();
+    $("confirm-title").textContent = book.title;
+    $("confirm-author").textContent =
+      [book.author, book.year].filter(Boolean).join(", ");
+    $("confirm-isbn").textContent = `ISBN ${book.isbn13}`;
+    const cover = $("confirm-cover");
+    cover.hidden = true;
+    cover.onload = () => { cover.hidden = cover.naturalWidth <= 1; };
+    cover.src = coverUrl(book, "M");
+    card.hidden = false;
+    setStatus("");
+  }
+
+  function renderDropdown() {
+    dropdown.replaceChildren();
+    for (const [index, book] of suggestions.entries()) {
+      const item = document.createElement("li");
+      item.role = "option";
+      item.className = "suggestion" + (index === activeIndex ? " active" : "");
+
+      const cover = document.createElement("img");
+      cover.className = "suggestion-cover";
+      cover.alt = "";
+      cover.loading = "lazy";
+      cover.src = coverUrl(book, "S");
+      cover.onerror = () => cover.removeAttribute("src");
+      item.append(cover);
+
+      const text = document.createElement("div");
+      text.className = "suggestion-text";
+      const title = document.createElement("span");
+      title.className = "suggestion-title";
+      title.textContent = book.title;
+      const author = document.createElement("span");
+      author.className = "suggestion-author";
+      author.textContent = [book.author, book.year].filter(Boolean).join(", ");
+      text.append(title, author);
+      item.append(text);
+
+      // mousedown, not click: fires before the input loses focus.
+      item.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        showConfirm(book);
+      });
+      dropdown.append(item);
+    }
+    dropdown.hidden = suggestions.length === 0;
+    input.setAttribute("aria-expanded", String(suggestions.length > 0));
+  }
+
+  async function fetchSuggestions(query) {
+    try {
+      const results = await api(`/api/search?q=${encodeURIComponent(query)}`);
+      if (input.value.trim() !== query) return; // stale response
+      suggestions = results;
+      activeIndex = -1;
+      renderDropdown();
+    } catch { /* typeahead is best-effort; submit still verifies */ }
+  }
+
+  input.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    hideConfirm();
+    const query = input.value.trim();
+    if (query.length < 3 || looksLikeIsbn(query)) {
+      hideDropdown();
+      return;
+    }
+    debounceTimer = setTimeout(() => fetchSuggestions(query), 300);
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (dropdown.hidden) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      activeIndex = (activeIndex + step + suggestions.length) % suggestions.length;
+      renderDropdown();
+    } else if (event.key === "Enter" && activeIndex >= 0) {
+      event.preventDefault();
+      showConfirm(suggestions[activeIndex]);
+    } else if (event.key === "Escape") {
+      hideDropdown();
+    }
+  });
+  input.addEventListener("blur", () => setTimeout(hideDropdown, 150));
+
+  async function submitBook(bookName) {
+    setStatus("Adding to the card…");
     try {
       const result = await api(submitUrl, {
         method: "POST",
-        body: JSON.stringify({ book_name: name }),
+        body: JSON.stringify({ book_name: bookName }),
       });
       setStatus(STATUS_TEXT[result.status](result.book));
       input.value = "";
+      hideConfirm();
+      hideDropdown();
       await reload();
+    } catch (err) { showError(err); }
+  }
+
+  $("confirm-submit").addEventListener("click", () => {
+    if (selected) submitBook(selected.isbn13);
+  });
+  $("confirm-cancel").addEventListener("click", () => {
+    hideConfirm();
+    input.focus();
+  });
+
+  $("recommend-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (selected) return submitBook(selected.isbn13);
+    const query = input.value.trim();
+    if (!query) return;
+
+    // An exact ISBN needs no disambiguation — submit it directly.
+    if (looksLikeIsbn(query)) return submitBook(query);
+
+    // Otherwise search and ask for confirmation of the top match.
+    setStatus("Searching the catalogue…");
+    try {
+      const results = await api(`/api/search?q=${encodeURIComponent(query)}`);
+      if (results.length === 0) {
+        setStatus("No matching book found — try the exact title or an ISBN.", true);
+        return;
+      }
+      suggestions = results;
+      showConfirm(results[0]);
+      if (results.length > 1) renderDropdown(); // alternatives stay visible
     } catch (err) { showError(err); }
   });
 }

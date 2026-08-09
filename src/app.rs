@@ -16,7 +16,8 @@ use crate::state::AppState;
 pub fn build_app(state: AppState) -> Router {
     let read_api = Router::new()
         .route("/api/pages/{slug}", get(users::get_page))
-        .route("/api/global", get(recommendations::get_global));
+        .route("/api/global", get(recommendations::get_global))
+        .route("/api/search", get(recommendations::search));
 
     // Mutating routes carry the per-IP rate limit.
     let mut write_api = Router::new()
@@ -52,7 +53,8 @@ pub fn build_app(state: AppState) -> Router {
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
-                "default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'",
+                "default-src 'self'; img-src 'self' data: https://covers.openlibrary.org; \
+                 object-src 'none'; base-uri 'none'",
             ),
         ))
         .layer(SetResponseHeaderLayer::if_not_present(

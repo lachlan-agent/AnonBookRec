@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::Json;
 use axum_extra::extract::CookieJar;
@@ -97,6 +97,25 @@ fn row_to_view(row: RecRow, private_key: Option<&SecretKey>) -> Option<Recommend
         recommendation_count: row.recommendation_count,
         timestamp: row.timestamp,
     })
+}
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    q: String,
+}
+
+/// Typeahead suggestions, proxied through the resolver so the browser never
+/// talks to Open Library directly (the CSP forbids it anyway).
+pub async fn search(
+    State(state): State<AppState>,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<Vec<crate::resolver::BookSuggestion>>, AppError> {
+    let q = query.q.trim();
+    if q.is_empty() || q.chars().count() > MAX_INPUT_LEN {
+        return Ok(Json(Vec::new()));
+    }
+    let suggestions = state.resolver.search(q).await.map_err(|_| AppError::Upstream)?;
+    Ok(Json(suggestions))
 }
 
 pub async fn get_global(

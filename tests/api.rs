@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anonbookrec::app::build_app;
 use anonbookrec::config::Config;
 use anonbookrec::db::MIGRATOR;
-use anonbookrec::resolver::{BookResolver, ResolvedBook, ResolverError};
+use anonbookrec::resolver::{BookResolver, BookSuggestion, ResolvedBook, ResolverError};
 use anonbookrec::state::AppState;
 use axum::body::Body;
 use axum::http::{header, Request, StatusCode};
@@ -39,6 +39,21 @@ impl BookResolver for StubResolver {
             title: "The Dispossessed".to_string(),
             isbn13: TITLE_MATCH_ISBN.to_string(),
         }))
+    }
+
+    async fn search(&self, query: &str) -> Result<Vec<BookSuggestion>, ResolverError> {
+        Ok(query
+            .to_lowercase()
+            .contains("dispossessed")
+            .then(|| BookSuggestion {
+                title: "The Dispossessed".to_string(),
+                author: Some("Ursula K. Le Guin".to_string()),
+                isbn13: TITLE_MATCH_ISBN.to_string(),
+                year: Some(1974),
+                cover_id: Some(12345),
+            })
+            .into_iter()
+            .collect())
     }
 }
 
@@ -322,6 +337,26 @@ async fn global_board_visit_and_submit() {
     let patched = call(&app, "PATCH", &format!("/api/recommendations/{rec_id}"),
         Some(json!({"read": true})), Some("anything"), None).await;
     assert_eq!(patched.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn search_returns_suggestions_with_metadata() {
+    let (app, _pool) = test_app().await;
+
+    let found = call(&app, "GET", "/api/search?q=dispossessed", None, None, None).await;
+    assert_eq!(found.status, StatusCode::OK);
+    let suggestions = found.body.as_array().unwrap();
+    assert_eq!(suggestions.len(), 1);
+    assert_eq!(suggestions[0]["title"], json!("The Dispossessed"));
+    assert_eq!(suggestions[0]["author"], json!("Ursula K. Le Guin"));
+    assert_eq!(suggestions[0]["isbn13"], json!(TITLE_MATCH_ISBN));
+    assert_eq!(suggestions[0]["cover_id"], json!(12345));
+
+    let none = call(&app, "GET", "/api/search?q=nothing+here", None, None, None).await;
+    assert_eq!(none.body.as_array().unwrap().len(), 0);
+
+    let empty = call(&app, "GET", "/api/search?q=", None, None, None).await;
+    assert_eq!(empty.body.as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]
