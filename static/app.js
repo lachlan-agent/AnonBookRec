@@ -42,10 +42,12 @@ function setStatus(message, isError = false) {
 
 const showError = (err) => setStatus(err.message, true);
 
+/* Shared wiring for elements that exist on some pages but not others:
+   every hookup is conditional, so any page can call this safely. */
 function wireCopyButtons() {
-  $("open-login").addEventListener("click", () => $("login-dialog").showModal());
-  $("close-login").addEventListener("click", () => $("login-dialog").close());
-  $("login-form").addEventListener("submit", async (event) => {
+  $("open-login")?.addEventListener("click", () => $("login-dialog").showModal());
+  $("close-login")?.addEventListener("click", () => $("login-dialog").close());
+  $("login-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     $("login-status").textContent = "";
     try {
