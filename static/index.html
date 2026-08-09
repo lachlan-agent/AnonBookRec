@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnonBookRec — anonymous book recommendations</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/app.js" defer></script>
+</head>
+<body data-page="index">
+<header class="site-header">
+  <a class="wordmark" href="/">AnonBookRec</a>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Book recommendations,<br>no names attached.</h1>
+    <p>
+      Make a page, share the link anywhere. Anyone can drop you a book —
+      no accounts, no emails, nothing to sign. Every title is checked against
+      its ISBN, so only real books make it onto your card.
+    </p>
+    <button id="create-page" class="button primary">Create your page</button>
+    <p id="returning" class="returning" hidden>
+      Or return to <a id="returning-link" href="/">your page</a>.
+    </p>
+  </section>
+
+  <section class="shelf">
+    <div class="card-head">
+      <h2>The open shelf</h2>
+      <span class="card-note">recommendations from everyone, to everyone</span>
+    </div>
+    <form id="recommend-form" class="recommend-form">
+      <input id="book-input" name="book" type="text" maxlength="256" required
+             placeholder="A book title or ISBN" autocomplete="off">
+      <button class="button primary" type="submit">Recommend</button>
+    </form>
+    <p id="form-status" class="status" role="status"></p>
+    <ol id="rec-list" class="card-list" aria-label="Recommended books"></ol>
+    <p id="empty-shelf" class="empty" hidden>
+      The shelf is empty. Recommend the first book.
+    </p>
+  </section>
+</main>
+
+<dialog id="key-dialog" class="key-dialog">
+  <h2>Your page is ready</h2>
+  <p class="key-label">Share this link — anyone can recommend you a book:</p>
+  <div class="key-row">
+    <code id="page-url"></code>
+    <button class="button small" data-copy="page-url" type="button">Copy</button>
+  </div>
+  <p class="key-label">Your secret key — this is how you get back in:</p>
+  <div class="key-row">
+    <code id="secret-key"></code>
+    <button class="button small" data-copy="secret-key" type="button">Copy</button>
+  </div>
+  <div class="key-warning">
+    <p>
+      There is no account and no email, so this key is the only way to manage
+      your page and read private recommendations. It cannot be recovered or
+      reset. Save it somewhere safe before you continue.
+    </p>
+    <button id="download-key" class="button small" type="button">Download key file</button>
+  </div>
+  <label class="key-confirm">
+    <input id="key-saved" type="checkbox">
+    I saved my secret key somewhere safe
+  </label>
+  <button id="go-to-page" class="button primary" disabled type="button">Go to my page</button>
+</dialog>
+
+<footer class="site-footer">
+  <p>No accounts. No tracking. Books only.</p>
+</footer>
+</body>
+</html>

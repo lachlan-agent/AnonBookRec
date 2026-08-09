@@ -1,0 +1,234 @@
+/* AnonBookRec — library checkout-card aesthetic.
+   System stacks only: the CSP forbids external fonts. */
+
+:root {
+  --paper: #f5f4ef;
+  --card: #fbfaf6;
+  --ink: #22262b;
+  --ink-soft: #5c6067;
+  --rule: #d9d5c9;
+  --cloth: #2e5e4e;   /* bookcloth green: primary actions */
+  --cloth-dark: #234a3d;
+  --stamp: #b3543f;   /* stamp red: destructive, warnings */
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 1rem;
+  line-height: 1.55;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
+
+/* Header */
+.site-header {
+  width: min(42rem, 100% - 2.5rem);
+  margin: 0 auto;
+  padding: 1.4rem 0 0;
+}
+.wordmark {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--ink);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+.wordmark:hover { color: var(--cloth); }
+
+/* Hero */
+.hero { padding: 3.5rem 0 2.5rem; }
+.hero.compact { padding: 2.5rem 0 1.5rem; }
+.hero h1 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(1.9rem, 5.5vw, 2.8rem);
+  line-height: 1.15;
+  margin: 0 0 1rem;
+  letter-spacing: -0.01em;
+}
+.hero p { max-width: 34rem; color: var(--ink-soft); margin: 0 0 1.6rem; }
+.returning { font-size: 0.9rem; margin-top: 1rem; }
+.returning a { color: var(--cloth); }
+
+/* Buttons */
+.button {
+  font: 600 0.95rem var(--sans);
+  border: 1px solid var(--cloth-dark);
+  border-radius: 3px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  background: var(--card);
+  color: var(--cloth-dark);
+}
+.button.primary { background: var(--cloth); color: #fff; }
+.button.primary:hover { background: var(--cloth-dark); }
+.button.small { padding: 0.25rem 0.7rem; font-size: 0.8rem; }
+.button:disabled { opacity: 0.45; cursor: not-allowed; }
+.button.danger { border-color: var(--stamp); color: var(--stamp); background: transparent; }
+.button:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 2px solid var(--cloth);
+  outline-offset: 2px;
+}
+
+/* The card: ruled list like a library checkout slip */
+.shelf {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.5rem 1.5rem 1.75rem;
+  margin-bottom: 3rem;
+  box-shadow: 0 1px 0 var(--rule);
+}
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 0.5rem;
+}
+.card-head h2 {
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+.card-note {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.recommend-form { display: flex; gap: 0.6rem; margin: 1.1rem 0 0.2rem; }
+.recommend-form input {
+  flex: 1;
+  min-width: 0;
+  font: 1rem var(--serif);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.status { min-height: 1.3rem; font-size: 0.88rem; color: var(--cloth-dark); margin: 0.4rem 0 0; }
+.status.error { color: var(--stamp); }
+
+.card-list { list-style: none; margin: 0.75rem 0 0; padding: 0; }
+.card-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.65rem 0.1rem;
+  border-bottom: 1px solid var(--rule);
+}
+.rec-title { font-family: var(--serif); font-size: 1.08rem; }
+.rec-title.read { color: var(--ink-soft); }
+.rec-title.read::after { content: " ✓"; color: var(--cloth); }
+.rec-isbn { font: 0.72rem var(--mono); color: var(--ink-soft); letter-spacing: 0.03em; }
+.rec-count {
+  margin-left: auto;
+  font: 600 0.8rem var(--mono);
+  color: var(--cloth-dark);
+  white-space: nowrap;
+}
+.rec-private {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--stamp);
+  border: 1px solid var(--stamp);
+  border-radius: 2px;
+  padding: 0 0.3rem;
+}
+.rec-controls { display: flex; gap: 0.4rem; width: 100%; justify-content: flex-end; }
+.rec-controls .button { font-weight: 500; }
+.empty { color: var(--ink-soft); font-style: italic; margin: 1rem 0 0; }
+
+/* Owner panel */
+.owner-panel {
+  border: 1px dashed var(--cloth);
+  border-radius: 4px;
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1.5rem;
+  background: rgba(46, 94, 78, 0.05);
+  font-size: 0.9rem;
+}
+.owner-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.5rem; }
+.owner-note { font-family: var(--serif); font-style: italic; }
+.owner-toggle { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }
+.owner-hint { color: var(--ink-soft); font-size: 0.8rem; margin: 0.3rem 0 0 1.6rem; }
+
+/* Key dialog */
+.key-dialog {
+  width: min(30rem, 90vw);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--ink);
+  padding: 1.75rem;
+}
+.key-dialog::backdrop { background: rgba(34, 38, 43, 0.55); }
+.key-dialog h2 { font-family: var(--serif); margin: 0 0 1rem; }
+.key-label { font-size: 0.85rem; color: var(--ink-soft); margin: 0.9rem 0 0.3rem; }
+.key-row { display: flex; gap: 0.5rem; align-items: center; }
+.key-row code {
+  flex: 1;
+  font: 0.8rem var(--mono);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.45rem 0.6rem;
+  overflow-wrap: anywhere;
+}
+.key-warning {
+  border-left: 3px solid var(--stamp);
+  padding: 0.2rem 0 0.2rem 0.8rem;
+  margin: 1.1rem 0;
+  font-size: 0.85rem;
+}
+.key-warning p { margin: 0 0 0.6rem; }
+.key-confirm {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.site-footer {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  padding: 1.5rem 0;
+  font-family: var(--serif);
+  font-style: italic;
+}
+
+@media (max-width: 480px) {
+  .recommend-form { flex-direction: column; }
+  .rec-count { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card-list li { animation: settle 0.25s ease-out; }
+  @keyframes settle {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: none; }
+  }
+}

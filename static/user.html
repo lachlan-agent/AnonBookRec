@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recommend a book — AnonBookRec</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/app.js" defer></script>
+</head>
+<body data-page="user">
+<header class="site-header">
+  <a class="wordmark" href="/">AnonBookRec</a>
+</header>
+
+<main>
+  <section class="hero compact">
+    <h1 id="page-title">Recommend this reader a book</h1>
+    <p id="page-sub">
+      Whatever you think they should read next. No name needed — they'll
+      never know it was you.
+    </p>
+  </section>
+
+  <section class="owner-panel" id="owner-panel" hidden>
+    <div class="owner-row">
+      <span class="owner-note">This is your card.</span>
+      <button id="copy-share" class="button small" type="button">Copy share link</button>
+    </div>
+    <label class="owner-toggle">
+      <input id="default-public" type="checkbox">
+      Show new recommendations publicly
+    </label>
+    <p class="owner-hint">
+      When unchecked, new recommendations arrive sealed — encrypted so only
+      you, with your key, can read them.
+    </p>
+  </section>
+
+  <section class="shelf">
+    <div class="card-head">
+      <h2 id="shelf-title">The card</h2>
+      <span class="card-note" id="shelf-note"></span>
+    </div>
+    <form id="recommend-form" class="recommend-form">
+      <input id="book-input" name="book" type="text" maxlength="256" required
+             placeholder="A book title or ISBN" autocomplete="off">
+      <button class="button primary" type="submit">Recommend</button>
+    </form>
+    <p id="form-status" class="status" role="status"></p>
+    <ol id="rec-list" class="card-list" aria-label="Recommended books"></ol>
+    <p id="empty-shelf" class="empty" hidden>
+      Nothing here yet. Recommend the first book.
+    </p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>No accounts. No tracking. Books only.</p>
+</footer>
+</body>
+</html>
