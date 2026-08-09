@@ -23,16 +23,6 @@
     <p id="page-fav" class="page-fav" hidden></p>
   </section>
 
-  <section class="unlock-panel" id="unlock-panel" hidden>
-    <span class="owner-note">Your card? Unlock it with your secret key.</span>
-    <form id="unlock-form" class="unlock-row">
-      <input id="unlock-key" type="password" placeholder="Paste your secret key"
-             autocomplete="off">
-      <button class="button small" type="submit">Unlock</button>
-    </form>
-    <p id="unlock-status" class="status error" role="status"></p>
-  </section>
-
   <section class="owner-panel" id="owner-panel" hidden>
     <div class="owner-row">
       <span class="owner-note">This is your card.</span>
@@ -118,6 +108,16 @@
       Nothing here yet. Recommend the first book.
     </p>
   </section>
+
+  <details class="unlock-panel" id="unlock-panel" hidden>
+    <summary>Is this your card?</summary>
+    <form id="unlock-form" class="unlock-row">
+      <input id="unlock-key" type="password" placeholder="Paste your secret key"
+             autocomplete="off">
+      <button class="button small" type="submit">Unlock</button>
+    </form>
+    <p id="unlock-status" class="status error" role="status"></p>
+  </details>
 </main>
 
 <footer class="site-footer">

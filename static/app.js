@@ -300,33 +300,35 @@ function initIndex() {
     $("returning-link").href = `/u/${lastSlug}`;
   }
 
+  let createdPage = null;
+
   $("create-page").addEventListener("click", async () => {
     try {
-      const page = await api("/api/users", { method: "POST" });
-      localStorage.setItem(`abr_secret_${page.slug}`, page.secret);
-      localStorage.setItem("abr_last_slug", page.slug);
-      $("page-url").textContent = page.url;
-      $("secret-key").textContent = page.secret;
-      const dialog = $("key-dialog");
-      dialog.showModal();
-
-      $("download-key").addEventListener("click", () => {
-        const blob = new Blob(
-          [`AnonBookRec page: ${page.url}\nSecret key: ${page.secret}\n\nKeep this file private. The key cannot be recovered.\n`],
-          { type: "text/plain" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `anonbookrec-key-${page.slug}.txt`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-      });
-      $("key-saved").addEventListener("change", (event) => {
-        $("go-to-page").disabled = !event.target.checked;
-      });
-      $("go-to-page").addEventListener("click", () => {
-        window.location.href = `/u/${page.slug}`;
-      });
+      createdPage = await api("/api/users", { method: "POST" });
+      localStorage.setItem(`abr_secret_${createdPage.slug}`, createdPage.secret);
+      localStorage.setItem("abr_last_slug", createdPage.slug);
+      $("page-url").textContent = createdPage.url;
+      $("secret-key").textContent = createdPage.secret;
+      $("key-dialog").showModal();
     } catch (err) { showError(err); }
+  });
+
+  $("download-key").addEventListener("click", () => {
+    if (!createdPage) return;
+    const blob = new Blob(
+      [`AnonBookRec page: ${createdPage.url}\nSecret key: ${createdPage.secret}\n\nKeep this file private. The key cannot be recovered.\n`],
+      { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `anonbookrec-key-${createdPage.slug}.txt`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+  $("key-saved").addEventListener("change", (event) => {
+    $("go-to-page").disabled = !event.target.checked;
+  });
+  $("go-to-page").addEventListener("click", () => {
+    if (createdPage) window.location.href = `/u/${createdPage.slug}`;
   });
 
   document.querySelectorAll("[data-copy]").forEach((button) => {
