@@ -332,6 +332,27 @@ body[data-theme="constellation"] {
   --cloth: #5749a8; --cloth-dark: #a99ef0; --stamp: #d07a63;
 }
 
+body[data-theme="matrix"] {
+  --paper: #0a0f0a; --card: #101710; --field: #162116;
+  --ink: #d8f5d8; --ink-soft: #7fae7f; --rule: #1f2f1f;
+  --cloth: #1f8a3f; --cloth-dark: #6fe08f; --stamp: #d0a44c;
+}
+body[data-theme="koi"] {
+  --paper: #0f2228; --card: #163038; --field: #1d3b45;
+  --ink: #e6f0f0; --ink-soft: #94b0b4; --rule: #26454f;
+  --cloth: #c46a32; --cloth-dark: #f0a06a; --stamp: #cf5f4a;
+}
+body[data-theme="lava"] {
+  --paper: #16101f; --card: #1e1629; --field: #271d35;
+  --ink: #f0e8f8; --ink-soft: #a795bd; --rule: #362a48;
+  --cloth: #9a3a7a; --cloth-dark: #e08ac0; --stamp: #e0813f;
+}
+body[data-theme="flock"] {
+  --paper: #f6f3ec; --card: #fcfaf5; --field: #ffffff;
+  --ink: #2a2a28; --ink-soft: #6f6d66; --rule: #ddd8ca;
+  --cloth: #b0522f; --cloth-dark: #8a3c20; --stamp: #b3543f;
+}
+
 #theme-canvas {
   position: fixed;
   inset: 0;

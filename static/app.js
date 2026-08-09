@@ -187,6 +187,187 @@ const CANVAS_THEMES = {
   },
 };
 
+/* Matrix: columns of glyph rain with fading trails */
+CANVAS_THEMES.matrix = {
+  make: (w) => Array.from({ length: Math.ceil(w / 16) }, (_, i) => ({
+    x: i * 16 + 8, y: Math.random() * -800,
+    speed: 60 + Math.random() * 140, trail: 10 + Math.floor(Math.random() * 10),
+  })),
+  draw(ctx, cols, w, h, dt) {
+    const glyphs = "アイウエオカキクケコサシスセソ0123456789ネノABCDEF";
+    ctx.font = "14px monospace";
+    ctx.textAlign = "center";
+    for (const c of cols) {
+      c.y += c.speed * dt;
+      if (c.y - c.trail * 16 > h) { c.y = Math.random() * -300; c.speed = 60 + Math.random() * 140; }
+      for (let i = 0; i < c.trail; i++) {
+        const y = c.y - i * 16;
+        if (y < -16 || y > h + 16) continue;
+        const alpha = i === 0 ? 0.8 : 0.35 * (1 - i / c.trail);
+        ctx.fillStyle = i === 0 ? `rgba(200, 255, 200, ${alpha})` : `rgba(60, 210, 110, ${alpha})`;
+        ctx.fillText(glyphs[(Math.floor(c.y / 16) * 7 + i * 13) % glyphs.length], c.x, y);
+      }
+    }
+  },
+};
+
+/* Koi pond: fish steering around the page, occasional ripples */
+CANVAS_THEMES.koi = {
+  make: (w, h) => ({
+    fish: Array.from({ length: 5 }, (_, i) => ({
+      x: Math.random() * w, y: Math.random() * h,
+      angle: Math.random() * Math.PI * 2, speed: 34 + Math.random() * 26,
+      phase: Math.random() * Math.PI * 2, size: 11 + Math.random() * 7,
+      calico: i % 2 === 0,
+    })),
+    ripples: [],
+    nextRipple: 1,
+  }),
+  draw(ctx, pond, w, h, dt, t) {
+    pond.nextRipple -= dt;
+    if (pond.nextRipple <= 0) {
+      pond.ripples.push({ x: Math.random() * w, y: Math.random() * h, r: 0, alpha: 0.3 });
+      pond.nextRipple = 2 + Math.random() * 3;
+    }
+    for (const r of pond.ripples) {
+      r.r += 26 * dt;
+      r.alpha -= 0.07 * dt;
+      ctx.strokeStyle = `rgba(180, 220, 225, ${Math.max(r.alpha, 0)})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    pond.ripples = pond.ripples.filter((r) => r.alpha > 0.01);
+
+    for (const k of pond.fish) {
+      // Wander, plus a steer back toward the middle near the edges.
+      k.angle += Math.sin(t * 0.7 + k.phase) * 0.5 * dt;
+      const margin = 70;
+      if (k.x < margin || k.x > w - margin || k.y < margin || k.y > h - margin) {
+        const toCenter = Math.atan2(h / 2 - k.y, w / 2 - k.x);
+        let delta = toCenter - k.angle;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        k.angle += delta * 0.9 * dt;
+      }
+      k.x += Math.cos(k.angle) * k.speed * dt;
+      k.y += Math.sin(k.angle) * k.speed * dt;
+
+      const wag = Math.sin(t * 5 + k.phase) * 0.4;
+      ctx.save();
+      ctx.translate(k.x, k.y);
+      ctx.rotate(k.angle);
+      // tail
+      ctx.fillStyle = k.calico ? "rgba(224, 130, 70, 0.5)" : "rgba(235, 235, 230, 0.42)";
+      ctx.save();
+      ctx.translate(-k.size * 1.2, 0);
+      ctx.rotate(wag);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-k.size * 0.9, -k.size * 0.5);
+      ctx.lineTo(-k.size * 0.9, k.size * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      // body
+      ctx.beginPath();
+      ctx.ellipse(0, 0, k.size * 1.35, k.size * 0.55, 0, 0, Math.PI * 2);
+      ctx.fillStyle = k.calico ? "rgba(238, 238, 232, 0.55)" : "rgba(224, 130, 70, 0.55)";
+      ctx.fill();
+      if (k.calico) {
+        ctx.clip();
+        ctx.fillStyle = "rgba(224, 130, 70, 0.6)";
+        ctx.beginPath();
+        ctx.arc(k.size * 0.5, -k.size * 0.15, k.size * 0.45, 0, Math.PI * 2);
+        ctx.arc(-k.size * 0.4, k.size * 0.2, k.size * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  },
+};
+
+/* Lava lamp: additive metaball blobs drifting up and down */
+CANVAS_THEMES.lava = {
+  make: (w, h) => Array.from({ length: 7 }, (_, i) => ({
+    x: (i + 0.5) * (w / 7), y: Math.random() * h,
+    r: 44 + Math.random() * 50, vy: 12 + Math.random() * 16,
+    dir: i % 2 ? 1 : -1, phase: Math.random() * Math.PI * 2,
+  })),
+  draw(ctx, blobs, w, h, dt, t) {
+    ctx.globalCompositeOperation = "lighter";
+    for (const b of blobs) {
+      b.y += b.vy * b.dir * dt;
+      if (b.y < -b.r) { b.dir = 1; b.x = Math.random() * w; }
+      if (b.y > h + b.r) { b.dir = -1; b.x = Math.random() * w; }
+      const x = b.x + Math.sin(t * 0.4 + b.phase) * 30;
+      const squish = 1 + Math.sin(t * 0.9 + b.phase) * 0.12;
+      const g = ctx.createRadialGradient(x, b.y, 0, x, b.y, b.r * squish);
+      g.addColorStop(0, "rgba(200, 70, 150, 0.16)");
+      g.addColorStop(0.6, "rgba(160, 60, 140, 0.10)");
+      g.addColorStop(1, "rgba(120, 40, 120, 0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, b.y, b.r * squish, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over";
+  },
+};
+
+/* Paper birds: a boids flock in ink on paper */
+CANVAS_THEMES.flock = {
+  make: (w, h) => Array.from({ length: 32 }, () => ({
+    x: Math.random() * w, y: Math.random() * h,
+    vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60,
+  })),
+  draw(ctx, birds, w, h, dt) {
+    const reach = 62, maxSpeed = 70;
+    for (const b of birds) {
+      let cx = 0, cy = 0, ax = 0, ay = 0, sx = 0, sy = 0, n = 0;
+      for (const o of birds) {
+        if (o === b) continue;
+        const dx = o.x - b.x, dy = o.y - b.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < reach) {
+          cx += o.x; cy += o.y; ax += o.vx; ay += o.vy; n++;
+          if (dist < 22 && dist > 0) { sx -= dx / dist; sy -= dy / dist; }
+        }
+      }
+      if (n) {
+        b.vx += ((cx / n - b.x) * 0.4 + (ax / n - b.vx) * 0.9) * dt;
+        b.vy += ((cy / n - b.y) * 0.4 + (ay / n - b.vy) * 0.9) * dt;
+      }
+      b.vx += sx * 42 * dt;
+      b.vy += sy * 42 * dt;
+      // stay on the page
+      if (b.x < 60) b.vx += 46 * dt;
+      if (b.x > w - 60) b.vx -= 46 * dt;
+      if (b.y < 60) b.vy += 46 * dt;
+      if (b.y > h - 60) b.vy -= 46 * dt;
+      const speed = Math.hypot(b.vx, b.vy) || 1;
+      if (speed > maxSpeed) { b.vx *= maxSpeed / speed; b.vy *= maxSpeed / speed; }
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+
+      const angle = Math.atan2(b.vy, b.vx);
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(angle);
+      ctx.fillStyle = "rgba(42, 42, 40, 0.34)";
+      ctx.beginPath();
+      ctx.moveTo(6, 0);
+      ctx.lineTo(-5, -4);
+      ctx.lineTo(-2.5, 0);
+      ctx.lineTo(-5, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  },
+};
+
 let canvasThemeCleanup = null;
 
 function applyCanvasTheme(name) {
