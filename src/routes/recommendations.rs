@@ -21,6 +21,8 @@ const MAX_NOTE_LEN: usize = 500;
 struct SealedBook {
     book_name: String,
     isbn: String,
+    #[serde(default)]
+    author: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -28,6 +30,7 @@ pub struct RecommendationView {
     pub id: i64,
     pub book_name: String,
     pub isbn: String,
+    pub author: Option<String>,
     pub is_public: bool,
     pub read: bool,
     pub recommendation_count: i64,
@@ -42,6 +45,7 @@ struct RecRow {
     user_id: Option<i64>,
     book_name: Option<String>,
     isbn: Option<String>,
+    author: Option<String>,
     enc_payload: Option<Vec<u8>>,
     is_public: bool,
     read: bool,
@@ -49,7 +53,7 @@ struct RecRow {
     timestamp: String,
 }
 
-const REC_COLUMNS: &str = "id, user_id, book_name, isbn, enc_payload, is_public, \
+const REC_COLUMNS: &str = "id, user_id, book_name, isbn, author, enc_payload, is_public, \
                            read, recommendation_count, timestamp";
 
 /// Fetch recommendations for a page (or the global board when `user_id` is
@@ -112,12 +116,12 @@ pub async fn load_recommendations(
 }
 
 fn row_to_view(row: RecRow, private_key: Option<&SecretKey>) -> Option<RecommendationView> {
-    let (book_name, isbn) = match (&row.book_name, &row.isbn, &row.enc_payload) {
-        (Some(name), Some(isbn), _) => (name.clone(), isbn.clone()),
+    let (book_name, isbn, author) = match (&row.book_name, &row.isbn, &row.enc_payload) {
+        (Some(name), Some(isbn), _) => (name.clone(), isbn.clone(), row.author.clone()),
         (_, _, Some(payload)) => {
             let opened = crypto::unseal(private_key?, payload)?;
             let sealed: SealedBook = serde_json::from_slice(&opened).ok()?;
-            (sealed.book_name, sealed.isbn)
+            (sealed.book_name, sealed.isbn, sealed.author)
         }
         _ => return None,
     };
@@ -125,6 +129,7 @@ fn row_to_view(row: RecRow, private_key: Option<&SecretKey>) -> Option<Recommend
         id: row.id,
         book_name,
         isbn,
+        author,
         is_public: row.is_public,
         read: row.read,
         recommendation_count: row.recommendation_count,
@@ -266,12 +271,14 @@ async fn submit(
         let is_public = target.as_ref().map(|u| u.default_public).unwrap_or(true);
         let result = if is_public {
             sqlx::query(
-                "INSERT INTO recommendations (user_id, book_name, isbn, isbn_index, user_key, is_public)
-                 VALUES (?, ?, ?, ?, ?, 1)",
+                "INSERT INTO recommendations
+                     (user_id, book_name, isbn, author, isbn_index, user_key, is_public)
+                 VALUES (?, ?, ?, ?, ?, ?, 1)",
             )
             .bind(user_id)
             .bind(&title)
             .bind(&resolved.isbn13)
+            .bind(&resolved.author)
             .bind(&blind)
             .bind(&submitter)
             .execute(&mut *tx)
@@ -281,6 +288,7 @@ async fn submit(
             let payload = serde_json::to_vec(&SealedBook {
                 book_name: title.clone(),
                 isbn: resolved.isbn13.clone(),
+                author: resolved.author.clone(),
             })
             .expect("sealed payload serializes");
             let sealed = crypto::seal(&target.public_key, &payload)?;
@@ -409,10 +417,12 @@ pub async fn patch_rec(
             let mut tx = state.pool.begin().await?;
             sqlx::query(
                 "UPDATE recommendations
-                 SET book_name = ?, isbn = ?, enc_payload = NULL, is_public = 1 WHERE id = ?",
+                 SET book_name = ?, isbn = ?, author = ?, enc_payload = NULL, is_public = 1
+                 WHERE id = ?",
             )
             .bind(&sealed.book_name)
             .bind(&sealed.isbn)
+            .bind(&sealed.author)
             .bind(rec_id)
             .execute(&mut *tx)
             .await?;
@@ -443,13 +453,15 @@ pub async fn patch_rec(
             let payload = serde_json::to_vec(&SealedBook {
                 book_name: row.book_name.clone().unwrap_or_default(),
                 isbn: row.isbn.clone().unwrap_or_default(),
+                author: row.author.clone(),
             })
             .expect("sealed payload serializes");
             let sealed = crypto::seal(&user.public_key, &payload)?;
             let mut tx = state.pool.begin().await?;
             sqlx::query(
                 "UPDATE recommendations
-                 SET book_name = NULL, isbn = NULL, enc_payload = ?, is_public = 0 WHERE id = ?",
+                 SET book_name = NULL, isbn = NULL, author = NULL, enc_payload = ?, is_public = 0
+                 WHERE id = ?",
             )
             .bind(&sealed)
             .bind(rec_id)

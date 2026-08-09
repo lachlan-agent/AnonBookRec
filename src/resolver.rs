@@ -11,6 +11,7 @@ use crate::isbn;
 pub struct ResolvedBook {
     pub title: String,
     pub isbn13: String,
+    pub author: Option<String>,
 }
 
 /// A search suggestion shown to the user before they commit to a book.
@@ -100,6 +101,36 @@ impl SearchDoc {
 #[async_trait::async_trait]
 impl BookResolver for OpenLibraryResolver {
     async fn by_isbn(&self, isbn13: &str) -> Result<Option<ResolvedBook>, ResolverError> {
+        // The search index carries author names in one request; prefer it,
+        // and fall back to the edition endpoint (title only) for ISBNs that
+        // exist but haven't been indexed.
+        let url = format!("{}/search.json", self.base_url);
+        let search: SearchResponse = self
+            .client
+            .get(&url)
+            .query(&[
+                ("q", format!("isbn:{isbn13}").as_str()),
+                ("fields", "title,author_name"),
+                ("limit", "1"),
+            ])
+            .send()
+            .await
+            .map_err(|e| ResolverError::Upstream(e.into()))?
+            .error_for_status()
+            .map_err(|e| ResolverError::Upstream(e.into()))?
+            .json()
+            .await
+            .map_err(|e| ResolverError::Upstream(e.into()))?;
+        if let Some(doc) = search.docs.into_iter().next()
+            && let Some(title) = doc.title
+        {
+            return Ok(Some(ResolvedBook {
+                title,
+                isbn13: isbn13.to_string(),
+                author: doc.author_name.and_then(|a| a.into_iter().next()),
+            }));
+        }
+
         let url = format!("{}/isbn/{}.json", self.base_url, isbn13);
         let response = self
             .client
@@ -116,7 +147,11 @@ impl BookResolver for OpenLibraryResolver {
             .json()
             .await
             .map_err(|e| ResolverError::Upstream(e.into()))?;
-        Ok(Some(ResolvedBook { title: edition.title, isbn13: isbn13.to_string() }))
+        Ok(Some(ResolvedBook {
+            title: edition.title,
+            isbn13: isbn13.to_string(),
+            author: None,
+        }))
     }
 
     async fn by_title(&self, title: &str) -> Result<Option<ResolvedBook>, ResolverError> {
@@ -124,7 +159,7 @@ impl BookResolver for OpenLibraryResolver {
         let response: SearchResponse = self
             .client
             .get(&url)
-            .query(&[("q", title), ("fields", "title,isbn"), ("limit", "5")])
+            .query(&[("q", title), ("fields", "title,isbn,author_name"), ("limit", "5")])
             .send()
             .await
             .map_err(|e| ResolverError::Upstream(e.into()))?
@@ -138,7 +173,11 @@ impl BookResolver for OpenLibraryResolver {
         for doc in response.docs {
             let Some(isbn13) = doc.valid_isbn13() else { continue };
             if let Some(title) = doc.title {
-                return Ok(Some(ResolvedBook { title, isbn13 }));
+                return Ok(Some(ResolvedBook {
+                    title,
+                    isbn13,
+                    author: doc.author_name.and_then(|a| a.into_iter().next()),
+                }));
             }
         }
         Ok(None)

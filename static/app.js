@@ -94,10 +94,9 @@ function renderList(recommendations, { owner, secret, slug } = {}) {
 
   for (const rec of recommendations) {
     const item = el("li");
-    item.append(
-      el("span", "rec-title" + (rec.read ? " read" : ""), rec.book_name),
-      el("span", "rec-isbn", `ISBN ${rec.isbn}`),
-    );
+    item.append(el("span", "rec-title" + (rec.read ? " read" : ""), rec.book_name));
+    if (rec.author) item.append(el("span", "rec-author", rec.author));
+    item.append(el("span", "rec-isbn", `ISBN ${rec.isbn}`));
     if (owner && !rec.is_public) {
       item.append(el("span", "rec-private", "sealed"));
     }

@@ -31,6 +31,7 @@ impl BookResolver for StubResolver {
         Ok((isbn13 == KNOWN_ISBN).then(|| ResolvedBook {
             title: KNOWN_ISBN_TITLE.to_string(),
             isbn13: isbn13.to_string(),
+            author: Some("Joshua Bloch".to_string()),
         }))
     }
 
@@ -38,6 +39,7 @@ impl BookResolver for StubResolver {
         Ok(title.to_lowercase().contains("dispossessed").then(|| ResolvedBook {
             title: "The Dispossessed".to_string(),
             isbn13: TITLE_MATCH_ISBN.to_string(),
+            author: Some("Ursula K. Le Guin".to_string()),
         }))
     }
 
@@ -418,13 +420,15 @@ async fn private_recommendations_are_encrypted_at_rest() {
     assert_eq!(submitted.body["status"], json!("created"));
 
     // At rest: no plaintext, sealed payload present.
-    let (book_name, isbn, enc_len): (Option<String>, Option<String>, i64) = sqlx::query_as(
-        "SELECT book_name, isbn, length(enc_payload) FROM recommendations")
+    let (book_name, isbn, author, enc_len): (Option<String>, Option<String>, Option<String>, i64) =
+        sqlx::query_as(
+        "SELECT book_name, isbn, author, length(enc_payload) FROM recommendations")
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(book_name, None);
     assert_eq!(isbn, None);
+    assert_eq!(author, None, "author must be sealed, not plaintext");
     assert!(enc_len > 0);
     let raw: Vec<u8> = sqlx::query_scalar("SELECT enc_payload FROM recommendations")
         .fetch_one(&pool)
@@ -441,6 +445,7 @@ async fn private_recommendations_are_encrypted_at_rest() {
     let recs = owner.body["recommendations"].as_array().unwrap();
     assert_eq!(recs.len(), 1);
     assert_eq!(recs[0]["book_name"], json!("The Dispossessed"));
+    assert_eq!(recs[0]["author"], json!("Ursula K. Le Guin"));
     assert_eq!(recs[0]["is_public"], json!(false));
 
     // Dedupe still works against the sealed row.
@@ -489,6 +494,7 @@ async fn owner_can_toggle_visibility_read_and_delete() {
     let public = call(&app, "GET", &format!("/api/pages/{slug}"), None, None, None).await;
     let recs = public.body["recommendations"].as_array().unwrap();
     assert_eq!(recs[0]["book_name"], json!("The Dispossessed"));
+    assert_eq!(recs[0]["author"], json!("Ursula K. Le Guin"));
     assert_eq!(recs[0]["read"], json!(true));
 
     // Delete.
