@@ -229,9 +229,14 @@ function wireSubmitForm(submitUrl, reload) {
   async function submitBook(bookName) {
     setStatus("Adding to the card…");
     const note = $("book-note").value.trim();
+    // Send the owner key when we hold one: on a hidden page the canonical
+    // URL rejects anonymous submissions, and the key is what lets the owner
+    // recommend on their own card.
+    const ownSecret = localStorage.getItem(`abr_secret_${pageSlug()}`);
     try {
       const result = await api(submitUrl, {
         method: "POST",
+        headers: ownSecret ? bearer(ownSecret) : {},
         body: JSON.stringify({ book_name: bookName, note: note || null }),
       });
       const describe = STATUS_TEXT[result.status] || ((book) => `“${book.title}” recorded.`);

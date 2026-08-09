@@ -771,3 +771,26 @@ async fn same_book_on_different_pages_is_independent() {
     assert_eq!(a.body["status"], json!("created"));
     assert_eq!(b.body["status"], json!("created"), "blind index must be page-scoped");
 }
+
+#[tokio::test]
+async fn friend_link_allows_recommending() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    call(&app, "PATCH", &format!("/api/pages/{slug}"),
+        Some(json!({"is_hidden": true})), Some(&secret), None).await;
+    let minted = call(&app, "POST", &format!("/api/pages/{slug}/share-link"),
+        None, Some(&secret), None).await;
+    let token = minted.body["share_token"].as_str().unwrap().to_string();
+
+    let submit = call(&app, "POST", &format!("/api/pages/{token}/recommendations"),
+        Some(json!({"book_name": "The Dispossessed", "note": "via friend link"})),
+        None, None).await;
+    assert_eq!(submit.status, StatusCode::OK, "body: {:?}", submit.body);
+    assert_eq!(submit.body["status"], json!("created"));
+
+    // Owner submitting on the canonical URL: allowed because the frontend
+    // sends the bearer key with the submission.
+    let owner_submit = call(&app, "POST", &format!("/api/pages/{slug}/recommendations"),
+        Some(json!({"book_name": "9780134685991"})), Some(&secret), None).await;
+    assert_eq!(owner_submit.status, StatusCode::OK, "body: {:?}", owner_submit.body);
+}
