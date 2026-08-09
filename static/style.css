@@ -4,6 +4,7 @@
 :root {
   --paper: #f5f4ef;
   --card: #fbfaf6;
+  --field: #ffffff;
   --ink: #22262b;
   --ink-soft: #5c6067;
   --rule: #d9d5c9;
@@ -15,10 +16,33 @@
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-/* Owner-picked page colours ("simple user-specific styling") */
+/* Owner-picked page colours ("simple user-specific styling").
+   Light themes swap the accent; dark themes swap the whole palette.
+   Note: --cloth is the primary-button fill, --cloth-dark doubles as its
+   hover fill and as accent *text*, so dark themes give it a light value. */
 body[data-theme="ink"] { --cloth: #31456e; --cloth-dark: #253552; }
 body[data-theme="plum"] { --cloth: #5e2e52; --cloth-dark: #472340; }
 body[data-theme="amber"] { --cloth: #8a5a19; --cloth-dark: #6d4713; }
+body[data-theme="night"] {
+  --paper: #1c1e21; --card: #25282c; --field: #2d3136;
+  --ink: #e8e6e1; --ink-soft: #a0a49e; --rule: #3a3e43;
+  --cloth: #3f7a5e; --cloth-dark: #82c0a0; --stamp: #d07a63;
+}
+body[data-theme="midnight"] {
+  --paper: #141927; --card: #1c2333; --field: #232c40;
+  --ink: #e4e8f2; --ink-soft: #9aa3b8; --rule: #303a52;
+  --cloth: #3d5a99; --cloth-dark: #92abe0; --stamp: #d07a63;
+}
+body[data-theme="noir"] {
+  --paper: #121212; --card: #1b1b1b; --field: #242424;
+  --ink: #eae6df; --ink-soft: #9c968c; --rule: #333333;
+  --cloth: #8a5a19; --cloth-dark: #d0a44c; --stamp: #c4614a;
+}
+body[data-theme="garnet"] {
+  --paper: #1d1418; --card: #271b20; --field: #302228;
+  --ink: #efe6e9; --ink-soft: #ab9aa1; --rule: #40303a;
+  --cloth: #8a3a4d; --cloth-dark: #d693a2; --stamp: #d0a44c;
+}
 
 * { box-sizing: border-box; }
 
@@ -125,7 +149,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--rule);
   border-radius: 3px;
-  background: #fff;
+  background: var(--field);
   color: var(--ink);
 }
 
@@ -141,7 +165,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   margin: 0;
   padding: 0.25rem;
   list-style: none;
-  background: #fff;
+  background: var(--field);
   border: 1px solid var(--rule);
   border-radius: 3px;
   box-shadow: 0 4px 14px rgba(34, 38, 43, 0.12);
@@ -156,7 +180,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   border-radius: 2px;
   cursor: pointer;
 }
-.suggestion:hover, .suggestion.active { background: rgba(46, 94, 78, 0.1); }
+.suggestion:hover, .suggestion.active { background: color-mix(in srgb, var(--cloth) 14%, transparent); }
 .suggestion-cover {
   width: 2rem;
   height: 2.9rem;
@@ -183,7 +207,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   align-items: center;
   border: 1px solid var(--cloth);
   border-radius: 4px;
-  background: rgba(46, 94, 78, 0.05);
+  background: color-mix(in srgb, var(--cloth) 6%, transparent);
   padding: 0.8rem 1rem;
   margin-top: 0.8rem;
 }
@@ -259,7 +283,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   padding: 0.4rem 0.55rem;
   border: 1px solid var(--rule);
   border-radius: 3px;
-  background: #fff;
+  background: var(--field);
   color: var(--ink);
   resize: vertical;
 }
@@ -280,7 +304,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--rule);
   border-radius: 3px;
-  background: #fff;
+  background: var(--field);
   color: var(--ink);
 }
 
@@ -290,7 +314,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   border-radius: 4px;
   padding: 0.9rem 1.2rem;
   margin-bottom: 1.5rem;
-  background: rgba(46, 94, 78, 0.05);
+  background: color-mix(in srgb, var(--cloth) 6%, transparent);
   font-size: 0.9rem;
 }
 .owner-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.5rem; }
@@ -315,7 +339,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   padding: 0.35rem 0.6rem;
   border: 1px solid var(--rule);
   border-radius: 3px;
-  background: #fff;
+  background: var(--field);
   color: var(--ink);
   resize: vertical;
 }
@@ -361,7 +385,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
 .key-row code {
   flex: 1;
   font: 0.8rem var(--mono);
-  background: #fff;
+  background: var(--field);
   border: 1px solid var(--rule);
   border-radius: 3px;
   padding: 0.45rem 0.6rem;

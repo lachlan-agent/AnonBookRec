@@ -98,7 +98,8 @@ pub async fn get_page(
     }))
 }
 
-pub const THEMES: &[&str] = &["cloth", "ink", "plum", "amber"];
+pub const THEMES: &[&str] =
+    &["cloth", "ink", "plum", "amber", "night", "midnight", "noir", "garnet"];
 
 #[derive(Deserialize)]
 pub struct PagePatch {
