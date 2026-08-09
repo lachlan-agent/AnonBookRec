@@ -44,6 +44,113 @@ body[data-theme="garnet"] {
   --cloth: #8a3a4d; --cloth-dark: #d693a2; --stamp: #d0a44c;
 }
 
+/* Animated themes: palette + a fixed, pointer-transparent decor layer behind
+   the content. Pure CSS (the CSP allows no external assets); motion is slow
+   and ambient, and switches off under prefers-reduced-motion. */
+body[data-theme="forest"] {
+  --paper: #17211a; --card: #1f2c23; --field: #273529;
+  --ink: #e6ede5; --ink-soft: #9fb2a2; --rule: #35443a;
+  --cloth: #4d8a5f; --cloth-dark: #8cc79d; --stamp: #cf7f56;
+}
+body[data-theme="cosmos"] {
+  --paper: #0b0e1a; --card: #151a30; --field: #1c2140;
+  --ink: #e6e9f7; --ink-soft: #98a0c2; --rule: #262c50;
+  --cloth: #4f46a0; --cloth-dark: #a29be8; --stamp: #d07a63;
+}
+body[data-theme="prism"] {
+  --paper: #f4f5f7; --card: #fdfdfe; --field: #ffffff;
+  --ink: #23262d; --ink-soft: #6a6f7a; --rule: #dcdfe6;
+  --cloth: #3b4dbb; --cloth-dark: #2e3c94; --stamp: #b3543f;
+}
+
+body[data-theme="forest"]::before,
+body[data-theme="cosmos"]::before,
+body[data-theme="cosmos"]::after,
+body[data-theme="prism"]::before {
+  content: "";
+  position: fixed;
+  inset: -5%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Forest: sunlight drifting through a canopy */
+body[data-theme="forest"]::before {
+  background:
+    radial-gradient(42rem 30rem at 18% 8%, rgba(140, 199, 157, 0.16), transparent 60%),
+    radial-gradient(52rem 36rem at 82% 28%, rgba(77, 138, 95, 0.14), transparent 65%),
+    radial-gradient(38rem 30rem at 45% 95%, rgba(196, 179, 92, 0.08), transparent 60%);
+  animation: canopy-drift 36s ease-in-out infinite alternate;
+}
+@keyframes canopy-drift {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); opacity: 0.85; }
+  50% { opacity: 1; }
+  to { transform: translate3d(1.5%, 1.2%, 0) scale(1.07); opacity: 0.9; }
+}
+
+/* Cosmos: nebula wash + two twinkling star layers */
+body[data-theme="cosmos"]::before {
+  background:
+    radial-gradient(45rem 32rem at 75% 15%, rgba(103, 76, 180, 0.22), transparent 65%),
+    radial-gradient(38rem 30rem at 15% 75%, rgba(52, 89, 166, 0.18), transparent 60%),
+    radial-gradient(30rem 24rem at 50% 45%, rgba(166, 84, 122, 0.10), transparent 60%);
+  animation: nebula-drift 48s ease-in-out infinite alternate;
+}
+@keyframes nebula-drift {
+  from { transform: translate3d(-2%, -1%, 0) rotate(-0.5deg); }
+  to { transform: translate3d(2%, 1.5%, 0) rotate(0.5deg); }
+}
+body[data-theme="cosmos"]::after {
+  width: 2px;
+  height: 2px;
+  inset: auto;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow:
+    3vw 12vh 0 0 #fff, 9vw 78vh 0 1px #cdd3ff, 14vw 34vh 0 0 #fff,
+    18vw 88vh 0 0 #aeb6ff, 22vw 8vh 0 1px #fff, 27vw 55vh 0 0 #e8ebff,
+    31vw 28vh 0 0 #fff, 36vw 70vh 0 1px #cdd3ff, 41vw 15vh 0 0 #fff,
+    45vw 92vh 0 0 #aeb6ff, 49vw 42vh 0 1px #fff, 54vw 63vh 0 0 #e8ebff,
+    58vw 20vh 0 0 #fff, 63vw 81vh 0 0 #cdd3ff, 67vw 36vh 0 1px #fff,
+    71vw 5vh 0 0 #aeb6ff, 76vw 59vh 0 0 #fff, 80vw 26vh 0 1px #e8ebff,
+    85vw 74vh 0 0 #fff, 89vw 46vh 0 0 #cdd3ff, 93vw 11vh 0 1px #fff,
+    97vw 66vh 0 0 #aeb6ff, 6vw 50vh 0 0 #e8ebff, 33vw 96vh 0 0 #fff,
+    52vw 3vh 0 0 #cdd3ff, 69vw 90vh 0 1px #fff, 88vw 84vh 0 0 #e8ebff,
+    12vw 64vh 0 0 #fff, 79vw 40vh 0 0 #aeb6ff, 24vw 72vh 0 1px #fff;
+  animation: twinkle 5s ease-in-out infinite alternate;
+}
+@keyframes twinkle {
+  from { opacity: 0.35; }
+  45% { opacity: 0.9; }
+  60% { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
+/* Prism: a faint geometric lattice, panning very slowly */
+body[data-theme="prism"]::before {
+  background:
+    repeating-linear-gradient(60deg,
+      rgba(59, 77, 187, 0.05) 0 2px, transparent 2px 26px),
+    repeating-linear-gradient(-60deg,
+      rgba(59, 77, 187, 0.05) 0 2px, transparent 2px 26px),
+    repeating-linear-gradient(0deg,
+      rgba(179, 84, 63, 0.03) 0 2px, transparent 2px 26px);
+  animation: lattice-pan 60s linear infinite;
+}
+@keyframes lattice-pan {
+  from { background-position: 0 0, 0 0, 0 0; }
+  to { background-position: 52px 90px, -52px 90px, 0 -52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-theme]::before,
+  body[data-theme]::after {
+    animation: none !important;
+  }
+}
+
 * { box-sizing: border-box; }
 
 input, textarea {
