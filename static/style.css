@@ -144,6 +144,172 @@ body[data-theme="prism"]::before {
   to { background-position: 52px 90px, -52px 90px, 0 -52px; }
 }
 
+/* Manuscript: vellum, oxblood, and gold leaf — a static material theme */
+body[data-theme="manuscript"] {
+  --paper: #ede3cc; --card: #f6eeda; --field: #fbf6e8;
+  --ink: #372c1f; --ink-soft: #7a6a52; --rule: #d6c8a6;
+  --cloth: #7c2f2f; --cloth-dark: #5e2222; --stamp: #a8842c;
+}
+
+/* Blueprint: drafting paper, white ink on deep blue — static */
+body[data-theme="blueprint"] {
+  --paper: #14294a; --card: #1b3459; --field: #224069;
+  --ink: #e8eefc; --ink-soft: #9fb4d8; --rule: #2e4a77;
+  --cloth: #2f6fc4; --cloth-dark: #9cc0f0; --stamp: #d07a63;
+}
+body[data-theme="blueprint"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(232, 238, 252, 0.05) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(90deg, rgba(232, 238, 252, 0.05) 0 1px, transparent 1px 28px);
+}
+
+body[data-theme="ocean"] {
+  --paper: #0c1b24; --card: #12242f; --field: #18303d;
+  --ink: #e2eef2; --ink-soft: #8fa9b4; --rule: #24404d;
+  --cloth: #1f7a8c; --cloth-dark: #7cc6d6; --stamp: #d0845c;
+}
+body[data-theme="ember"] {
+  --paper: #1c1512; --card: #261d18; --field: #30251f;
+  --ink: #f0e7e0; --ink-soft: #ab9a8d; --rule: #41332b;
+  --cloth: #9c4a26; --cloth-dark: #e0916a; --stamp: #d0a44c;
+}
+body[data-theme="sakura"] {
+  --paper: #faf2f3; --card: #fefbfb; --field: #ffffff;
+  --ink: #33272b; --ink-soft: #7d6a70; --rule: #e8d5da;
+  --cloth: #b0526d; --cloth-dark: #8c3e55; --stamp: #b3543f;
+}
+body[data-theme="aurora"] {
+  --paper: #0d1615; --card: #142020; --field: #1a2b2a;
+  --ink: #e2f0ea; --ink-soft: #92aca2; --rule: #263c38;
+  --cloth: #2e7d64; --cloth-dark: #7fd4b4; --stamp: #cf7f56;
+}
+
+body[data-theme="ocean"]::before,
+body[data-theme="ocean"]::after,
+body[data-theme="ember"]::before,
+body[data-theme="ember"]::after,
+body[data-theme="sakura"]::before,
+body[data-theme="sakura"]::after,
+body[data-theme="aurora"]::before {
+  content: "";
+  position: fixed;
+  inset: -5%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Ocean: a slow swell of light from above, bubbles rising */
+body[data-theme="ocean"]::before {
+  background:
+    radial-gradient(60rem 30rem at 50% -10%, rgba(124, 198, 214, 0.14), transparent 65%),
+    radial-gradient(40rem 30rem at 20% 60%, rgba(31, 122, 140, 0.14), transparent 60%),
+    radial-gradient(45rem 32rem at 85% 80%, rgba(38, 96, 130, 0.12), transparent 65%);
+  animation: ocean-swell 26s ease-in-out infinite alternate;
+}
+@keyframes ocean-swell {
+  from { transform: translate3d(0, -1.2%, 0) scale(1.03); }
+  to { transform: translate3d(0, 1.2%, 0) scale(1.0); }
+}
+body[data-theme="ocean"]::after {
+  width: 3px;
+  height: 3px;
+  inset: auto;
+  top: 108vh;
+  left: 0;
+  border-radius: 50%;
+  opacity: 0.5;
+  box-shadow:
+    8vw -4vh 0 0 rgba(160, 215, 228, 0.5), 21vw -32vh 0 1px rgba(160, 215, 228, 0.35),
+    33vw -12vh 0 0 rgba(160, 215, 228, 0.45), 46vw -48vh 0 0 rgba(160, 215, 228, 0.3),
+    58vw -21vh 0 1px rgba(160, 215, 228, 0.45), 69vw -60vh 0 0 rgba(160, 215, 228, 0.3),
+    78vw -8vh 0 0 rgba(160, 215, 228, 0.5), 88vw -38vh 0 1px rgba(160, 215, 228, 0.35),
+    95vw -70vh 0 0 rgba(160, 215, 228, 0.3), 15vw -80vh 0 0 rgba(160, 215, 228, 0.25);
+  animation: bubbles-rise 22s linear infinite;
+}
+@keyframes bubbles-rise {
+  from { transform: translateY(0); }
+  to { transform: translateY(-215vh); }
+}
+
+/* Ember: hearth glow breathing at the foot of the page, sparks drifting up */
+body[data-theme="ember"]::before {
+  background:
+    radial-gradient(70rem 32rem at 50% 108%, rgba(224, 122, 58, 0.20), transparent 70%),
+    radial-gradient(30rem 18rem at 22% 105%, rgba(208, 164, 76, 0.12), transparent 65%);
+  animation: ember-breathe 7s ease-in-out infinite alternate;
+}
+@keyframes ember-breathe {
+  from { opacity: 0.7; transform: scale(1.0); }
+  to { opacity: 1; transform: scale(1.04); }
+}
+body[data-theme="ember"]::after {
+  width: 2px;
+  height: 2px;
+  inset: auto;
+  top: 105vh;
+  left: 0;
+  border-radius: 50%;
+  box-shadow:
+    18vw -2vh 0 0 rgba(240, 156, 90, 0.8), 42vw -14vh 0 0 rgba(224, 122, 58, 0.6),
+    63vw -6vh 0 1px rgba(240, 156, 90, 0.7), 81vw -18vh 0 0 rgba(208, 164, 76, 0.6),
+    30vw -26vh 0 0 rgba(224, 122, 58, 0.5), 74vw -32vh 0 0 rgba(240, 156, 90, 0.4);
+  animation: sparks-drift 14s linear infinite;
+}
+@keyframes sparks-drift {
+  from { transform: translateY(0) translateX(0); opacity: 1; }
+  60% { opacity: 0.7; }
+  to { transform: translateY(-120vh) translateX(3vw); opacity: 0; }
+}
+
+/* Sakura: blush wash, petals falling with a light sway */
+body[data-theme="sakura"]::before {
+  background:
+    radial-gradient(45rem 30rem at 80% 5%, rgba(238, 176, 192, 0.20), transparent 60%),
+    radial-gradient(40rem 30rem at 10% 70%, rgba(244, 198, 208, 0.16), transparent 60%);
+}
+body[data-theme="sakura"]::after {
+  width: 4px;
+  height: 4px;
+  inset: auto;
+  top: -12vh;
+  left: 0;
+  border-radius: 60% 40% 55% 45%;
+  background: transparent;
+  box-shadow:
+    6vw 4vh 0 0 #f4c6d0, 17vw 42vh 0 1px #eeb0c0, 26vw 16vh 0 0 #f4c6d0,
+    37vw 64vh 0 0 #e8a0b4, 48vw 30vh 0 1px #f4c6d0, 57vw 78vh 0 0 #eeb0c0,
+    66vw 8vh 0 0 #f4c6d0, 75vw 52vh 0 1px #e8a0b4, 84vw 24vh 0 0 #eeb0c0,
+    93vw 70vh 0 0 #f4c6d0, 12vw 88vh 0 0 #eeb0c0, 89vw 92vh 0 0 #e8a0b4;
+  animation: petals-fall 30s linear infinite;
+}
+@keyframes petals-fall {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); }
+  25% { transform: translateY(30vh) translateX(2vw) rotate(45deg); }
+  50% { transform: translateY(60vh) translateX(-1vw) rotate(90deg); }
+  75% { transform: translateY(90vh) translateX(2vw) rotate(135deg); }
+  100% { transform: translateY(124vh) translateX(0) rotate(180deg); }
+}
+
+/* Aurora: curtains of polar light, slowly shifting hue */
+body[data-theme="aurora"]::before {
+  background:
+    linear-gradient(115deg, transparent 30%, rgba(127, 212, 180, 0.14) 45%, transparent 62%),
+    linear-gradient(100deg, transparent 40%, rgba(96, 164, 212, 0.12) 55%, transparent 72%),
+    linear-gradient(130deg, transparent 25%, rgba(150, 120, 210, 0.08) 42%, transparent 58%),
+    radial-gradient(50rem 30rem at 50% -15%, rgba(127, 212, 180, 0.10), transparent 65%);
+  animation: aurora-sweep 24s ease-in-out infinite alternate;
+}
+@keyframes aurora-sweep {
+  from { transform: translateX(-3%) skewX(-2deg); filter: hue-rotate(0deg); opacity: 0.8; }
+  50% { opacity: 1; }
+  to { transform: translateX(3%) skewX(2deg); filter: hue-rotate(40deg); opacity: 0.85; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   body[data-theme]::before,
   body[data-theme]::after {
