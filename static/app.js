@@ -1,6 +1,26 @@
 "use strict";
 
+/* ---------- Small helpers ---------- */
+
 const $ = (id) => document.getElementById(id);
+
+function el(tag, className, textContent) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (textContent !== undefined) node.textContent = textContent;
+  return node;
+}
+
+const bearer = (secret) => ({ Authorization: `Bearer ${secret}` });
+
+const byline = (book) => [book.author, book.year].filter(Boolean).join(", ");
+
+const looksLikeIsbn = (text) => /^[0-9\-\s]{10,17}[0-9Xx]?$/.test(text);
+
+const coverUrl = (book, size) =>
+  book.cover_id
+    ? `https://covers.openlibrary.org/b/id/${book.cover_id}-${size}.jpg`
+    : `https://covers.openlibrary.org/b/isbn/${book.isbn13}-${size}.jpg`;
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -9,8 +29,7 @@ async function api(path, options = {}) {
   let data = null;
   try { data = await response.json(); } catch { /* non-JSON error body */ }
   if (!response.ok) {
-    const message = (data && data.error) || `Request failed (${response.status})`;
-    throw new Error(message);
+    throw new Error((data && data.error) || `Request failed (${response.status})`);
   }
   return data;
 }
@@ -21,9 +40,13 @@ function setStatus(message, isError = false) {
   status.classList.toggle("error", isError);
 }
 
+const showError = (err) => setStatus(err.message, true);
+
+/* ---------- Recommendation list ---------- */
+
 const STATUS_TEXT = {
   created: (book) => `“${book.title}” added to the card.`,
-  counted: (book) => `“${book.title}” was already here — count bumped.`,
+  counted: (book) => `“${book.title}” was already here. Vote added.`,
   already_recommended: (book) => `You already recommended “${book.title}”.`,
 };
 
@@ -33,35 +56,18 @@ function renderList(recommendations, { owner, secret, slug } = {}) {
   $("empty-shelf").hidden = recommendations.length > 0;
 
   for (const rec of recommendations) {
-    const item = document.createElement("li");
-
-    const title = document.createElement("span");
-    title.className = "rec-title" + (rec.read ? " read" : "");
-    title.textContent = rec.book_name;
-    item.append(title);
-
-    const isbn = document.createElement("span");
-    isbn.className = "rec-isbn";
-    isbn.textContent = `ISBN ${rec.isbn}`;
-    item.append(isbn);
-
+    const item = el("li");
+    item.append(
+      el("span", "rec-title" + (rec.read ? " read" : ""), rec.book_name),
+      el("span", "rec-isbn", `ISBN ${rec.isbn}`),
+    );
     if (owner && !rec.is_public) {
-      const badge = document.createElement("span");
-      badge.className = "rec-private";
-      badge.textContent = "sealed";
-      item.append(badge);
+      item.append(el("span", "rec-private", "sealed"));
     }
-
-    const count = document.createElement("span");
-    count.className = "rec-count";
-    count.textContent = `× ${rec.recommendation_count}`;
-    item.append(count);
+    item.append(el("span", "rec-count", `× ${rec.recommendation_count}`));
 
     for (const note of rec.notes || []) {
-      const quote = document.createElement("blockquote");
-      quote.className = "rec-note";
-      quote.textContent = note;
-      item.append(quote);
+      item.append(el("blockquote", "rec-note", note));
     }
 
     if (owner) item.append(ownerControls(rec, secret, slug));
@@ -70,55 +76,44 @@ function renderList(recommendations, { owner, secret, slug } = {}) {
 }
 
 function ownerControls(rec, secret, slug) {
-  const controls = document.createElement("div");
-  controls.className = "rec-controls";
-
   const patch = async (body) => {
     await api(`/api/recommendations/${rec.id}`, {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${secret}` },
+      headers: bearer(secret),
       body: JSON.stringify(body),
     });
     await loadUserPage(slug);
   };
 
-  const readButton = document.createElement("button");
-  readButton.className = "button small";
-  readButton.type = "button";
-  readButton.textContent = rec.read ? "Mark unread" : "Mark read";
-  readButton.addEventListener("click", () => patch({ read: !rec.read }).catch(showError));
-  controls.append(readButton);
+  const button = (label, className, onClick) => {
+    const node = el("button", className, label);
+    node.type = "button";
+    node.addEventListener("click", () => onClick().catch(showError));
+    return node;
+  };
 
-  const visibilityButton = document.createElement("button");
-  visibilityButton.className = "button small";
-  visibilityButton.type = "button";
-  visibilityButton.textContent = rec.is_public ? "Seal" : "Reveal";
-  visibilityButton.addEventListener("click", () =>
-    patch({ is_public: !rec.is_public }).catch(showError));
-  controls.append(visibilityButton);
-
-  const deleteButton = document.createElement("button");
-  deleteButton.className = "button small danger";
-  deleteButton.type = "button";
-  deleteButton.textContent = "Remove";
-  deleteButton.addEventListener("click", async () => {
-    try {
+  const controls = el("div", "rec-controls");
+  controls.append(
+    button(rec.read ? "Mark unread" : "Mark read", "button small",
+      () => patch({ read: !rec.read })),
+    button(rec.is_public ? "Seal" : "Reveal", "button small",
+      () => patch({ is_public: !rec.is_public })),
+    button("Remove", "button small danger", async () => {
       await api(`/api/recommendations/${rec.id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${secret}` },
+        headers: bearer(secret),
       });
       await loadUserPage(slug);
-    } catch (err) { showError(err); }
-  });
-  controls.append(deleteButton);
-
+    }),
+  );
   return controls;
 }
 
-const showError = (err) => setStatus(err.message, true);
+/* ---------- Submit form (typeahead + confirmation) ----------
 
-/* Typeahead + confirmation. Nothing is submitted until the person confirms a
-   specific edition (title, author, cover), so the wrong book can't slip in. */
+   Nothing is submitted until the person confirms a specific edition
+   (title, author, cover), so the wrong book can't slip in. */
+
 function wireSubmitForm(submitUrl, reload) {
   const input = $("book-input");
   const dropdown = $("suggestions");
@@ -127,12 +122,6 @@ function wireSubmitForm(submitUrl, reload) {
   let suggestions = [];
   let activeIndex = -1;
   let selected = null;
-
-  const looksLikeIsbn = (text) => /^[0-9\-\s]{10,17}[0-9Xx]?$/.test(text);
-  const coverUrl = (book, size) =>
-    book.cover_id
-      ? `https://covers.openlibrary.org/b/id/${book.cover_id}-${size}.jpg`
-      : `https://covers.openlibrary.org/b/isbn/${book.isbn13}-${size}.jpg`;
 
   function hideDropdown() {
     dropdown.hidden = true;
@@ -151,8 +140,7 @@ function wireSubmitForm(submitUrl, reload) {
     selected = book;
     hideDropdown();
     $("confirm-title").textContent = book.title;
-    $("confirm-author").textContent =
-      [book.author, book.year].filter(Boolean).join(", ");
+    $("confirm-author").textContent = byline(book);
     $("confirm-isbn").textContent = `ISBN ${book.isbn13}`;
     const cover = $("confirm-cover");
     cover.hidden = true;
@@ -165,28 +153,21 @@ function wireSubmitForm(submitUrl, reload) {
   function renderDropdown() {
     dropdown.replaceChildren();
     for (const [index, book] of suggestions.entries()) {
-      const item = document.createElement("li");
+      const item = el("li", "suggestion" + (index === activeIndex ? " active" : ""));
       item.role = "option";
-      item.className = "suggestion" + (index === activeIndex ? " active" : "");
 
-      const cover = document.createElement("img");
-      cover.className = "suggestion-cover";
+      const cover = el("img", "suggestion-cover");
       cover.alt = "";
       cover.loading = "lazy";
       cover.src = coverUrl(book, "S");
       cover.onerror = () => cover.removeAttribute("src");
-      item.append(cover);
 
-      const text = document.createElement("div");
-      text.className = "suggestion-text";
-      const title = document.createElement("span");
-      title.className = "suggestion-title";
-      title.textContent = book.title;
-      const author = document.createElement("span");
-      author.className = "suggestion-author";
-      author.textContent = [book.author, book.year].filter(Boolean).join(", ");
-      text.append(title, author);
-      item.append(text);
+      const text = el("div", "suggestion-text");
+      text.append(
+        el("span", "suggestion-title", book.title),
+        el("span", "suggestion-author", byline(book)),
+      );
+      item.append(cover, text);
 
       // mousedown, not click: fires before the input loses focus.
       item.addEventListener("mousedown", (event) => {
@@ -207,6 +188,22 @@ function wireSubmitForm(submitUrl, reload) {
       activeIndex = -1;
       renderDropdown();
     } catch { /* typeahead is best-effort; submit still verifies */ }
+  }
+
+  async function submitBook(bookName) {
+    setStatus("Adding to the card…");
+    const note = $("book-note").value.trim();
+    try {
+      const result = await api(submitUrl, {
+        method: "POST",
+        body: JSON.stringify({ book_name: bookName, note: note || null }),
+      });
+      setStatus(STATUS_TEXT[result.status](result.book));
+      input.value = "";
+      hideConfirm();
+      hideDropdown();
+      await reload();
+    } catch (err) { showError(err); }
   }
 
   input.addEventListener("input", () => {
@@ -235,22 +232,6 @@ function wireSubmitForm(submitUrl, reload) {
     }
   });
   input.addEventListener("blur", () => setTimeout(hideDropdown, 150));
-
-  async function submitBook(bookName) {
-    setStatus("Adding to the card…");
-    const note = $("book-note").value.trim();
-    try {
-      const result = await api(submitUrl, {
-        method: "POST",
-        body: JSON.stringify({ book_name: bookName, note: note || null }),
-      });
-      setStatus(STATUS_TEXT[result.status](result.book));
-      input.value = "";
-      hideConfirm();
-      hideDropdown();
-      await reload();
-    } catch (err) { showError(err); }
-  }
 
   $("confirm-submit").addEventListener("click", () => {
     if (selected) submitBook(selected.isbn13);
@@ -308,7 +289,7 @@ function initIndex() {
   $("download-key").addEventListener("click", () => {
     if (!createdPage) return;
     const blob = new Blob(
-      [`AnonBookRec page: ${createdPage.url}\nSecret key: ${createdPage.secret}\n\nKeep this file private. The key cannot be recovered.\n`],
+      [`Anonymous Book Recommendation page: ${createdPage.url}\nSecret key: ${createdPage.secret}\n\nKeep this file private. The key cannot be recovered.\n`],
       { type: "text/plain" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -341,8 +322,9 @@ function pageSlug() {
 
 async function loadUserPage(slug) {
   const secret = localStorage.getItem(`abr_secret_${slug}`);
-  const headers = secret ? { Authorization: `Bearer ${secret}` } : {};
-  const page = await api(`/api/pages/${encodeURIComponent(slug)}`, { headers });
+  const page = await api(`/api/pages/${encodeURIComponent(slug)}`, {
+    headers: secret ? bearer(secret) : {},
+  });
 
   $("unlock-panel").hidden = page.owner || Boolean(secret);
   document.body.dataset.theme = page.theme || "cloth";
@@ -355,9 +337,8 @@ async function loadUserPage(slug) {
   if (page.owner) {
     $("page-title").textContent = page.display_name
       ? `${page.display_name}'s card` : "Your card";
-    $("page-sub").textContent =
-      "Share your link and books will appear here. Only you can see sealed ones.";
-    $("owner-panel").hidden = false;
+    $("page-sub").textContent = "";
+    $("open-settings").hidden = false;
     $("default-public").checked = page.default_public;
     $("profile-fields").disabled = !page.default_public;
     const fields = {
@@ -394,9 +375,18 @@ function initUser() {
   wireSubmitForm(`/api/pages/${encodeURIComponent(slug)}/recommendations`,
     () => loadUserPage(slug));
 
-  $("copy-share").addEventListener("click", async () => {
+  $("open-settings").addEventListener("click", () => {
+    $("settings-dialog").showModal();
+  });
+  $("close-settings").addEventListener("click", () => {
+    $("settings-dialog").close();
+  });
+
+  $("copy-share").addEventListener("click", async (event) => {
     await navigator.clipboard.writeText(`${window.location.origin}/u/${slug}`);
-    setStatus("Share link copied.");
+    const button = event.currentTarget;
+    button.textContent = "Link copied";
+    setTimeout(() => { button.textContent = "Copy share link"; }, 1200);
   });
 
   $("unlock-form").addEventListener("submit", async (event) => {
@@ -405,14 +395,12 @@ function initUser() {
     if (!key) return;
     try {
       // Verify the key against the API before trusting it.
-      await api(`/api/pages/${encodeURIComponent(slug)}`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
+      await api(`/api/pages/${encodeURIComponent(slug)}`, { headers: bearer(key) });
       localStorage.setItem(`abr_secret_${slug}`, key);
       localStorage.setItem("abr_last_slug", slug);
       window.location.reload();
     } catch {
-      $("unlock-status").textContent = "That key doesn't open this card.";
+      $("unlock-status").textContent = "Invalid key.";
     }
   });
 
@@ -433,7 +421,7 @@ function initUser() {
     try {
       await api(`/api/pages/${encodeURIComponent(slug)}`, {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${secret}` },
+        headers: bearer(secret),
         body: JSON.stringify({
           default_public: $("default-public").checked,
           display_name: $("display-name").value,
@@ -442,6 +430,7 @@ function initUser() {
           favourite_book: $("favourite-book").value,
         }),
       });
+      $("settings-dialog").close();
       setStatus("Settings saved.");
       await loadUserPage(slug);
     } catch (err) { showError(err); }
