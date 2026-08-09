@@ -3,6 +3,8 @@ use std::str::FromStr;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
 
+pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
+
 pub async fn init_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
     let options = SqliteConnectOptions::from_str(database_url)?
         .create_if_missing(true)
