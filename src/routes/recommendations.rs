@@ -162,10 +162,12 @@ pub struct SubmitBody {
 pub async fn submit_to_page(
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    headers: HeaderMap,
     jar: CookieJar,
     Json(body): Json<SubmitBody>,
 ) -> Result<(CookieJar, Json<serde_json::Value>), AppError> {
     let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    crate::routes::users::require_visible(&user, &slug, &headers)?;
     submit(state, Some(user), jar, body).await
 }
 

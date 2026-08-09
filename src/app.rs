@@ -100,8 +100,19 @@ pub fn build_app(state: AppState) -> Router {
             let not_found_html = not_found_html.clone();
             async move {
                 match crate::auth::user_by_slug(&state.pool, &slug).await {
-                    Ok(Some(_)) => Html(user_html).into_response(),
-                    Ok(None) => (StatusCode::NOT_FOUND, Html(not_found_html)).into_response(),
+                    // A hidden page's shell is served only at its share-token
+                    // URL; every other identifier 404s like a missing page
+                    // (document loads carry no bearer, so no owner special
+                    // case here — owners use the share URL too).
+                    Ok(Some(user))
+                        if !user.is_hidden
+                            || user.share_token.as_deref() == Some(slug.as_str()) =>
+                    {
+                        Html(user_html).into_response()
+                    }
+                    Ok(Some(_)) | Ok(None) => {
+                        (StatusCode::NOT_FOUND, Html(not_found_html)).into_response()
+                    }
                     Err(err) => err.into_response(),
                 }
             }

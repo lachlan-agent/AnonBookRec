@@ -24,25 +24,33 @@ pub struct User {
     pub username: Option<String>,
     pub password_hash: Option<String>,
     pub enc_secret: Option<Vec<u8>>,
+    pub is_hidden: bool,
+    pub share_token: Option<String>,
 }
 
 impl User {
-    /// Public handle for URLs: the chosen username, else the random slug.
+    /// Public handle for URLs. Hidden pages hand out only their long share
+    /// token; otherwise the chosen username, else the random slug.
     pub fn handle(&self) -> &str {
+        if self.is_hidden
+            && let Some(token) = self.share_token.as_deref()
+        {
+            return token;
+        }
         self.username.as_deref().unwrap_or(&self.slug)
     }
 }
 
 const USER_COLUMNS: &str = "id, slug, secret_hash, public_key, enc_private_key, default_public, \
                             display_name, bio, favourite_book, theme, username, password_hash, \
-                            enc_secret";
+                            enc_secret, is_hidden, share_token";
 
 /// Look a page up by its handle: random slug or chosen username. Old slug
 /// URLs keep working after a username is set.
 pub async fn user_by_slug(pool: &SqlitePool, slug: &str) -> Result<Option<User>, AppError> {
-    // Slugs are case-sensitive base58; usernames are stored lowercase.
+    // Slugs and share tokens are case-sensitive base58; usernames lowercase.
     let user = sqlx::query_as::<_, User>(sqlx::AssertSqlSafe(format!(
-        "SELECT {USER_COLUMNS} FROM users WHERE slug = ?1 OR username = ?2"
+        "SELECT {USER_COLUMNS} FROM users WHERE slug = ?1 OR username = ?2 OR share_token = ?1"
     )))
     .bind(slug)
     .bind(slug.to_lowercase())

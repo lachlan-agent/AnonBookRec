@@ -383,6 +383,14 @@ async function loadUserPage(slug) {
     for (const [id, value] of Object.entries(fields)) {
       if (document.activeElement !== $(id)) $(id).value = value || "";
     }
+    $("hide-page").checked = page.is_hidden;
+    // Hidden pages live at their share-token URL; if the canonical address
+    // was used (e.g. right after hiding), migrate storage and the URL bar.
+    if (page.handle && page.handle !== slug) {
+      localStorage.setItem(`abr_secret_${page.handle}`, secret);
+      localStorage.setItem("abr_last_slug", page.handle);
+      history.replaceState(null, "", `/u/${encodeURIComponent(page.handle)}`);
+    }
     $("account-current").textContent = page.username
       ? `Current username: ${page.username}.` : "No username set yet.";
     if (document.activeElement !== $("account-username")) {
@@ -682,6 +690,7 @@ function initUser() {
         headers: bearer(secret),
         body: JSON.stringify({
           default_public: $("default-public").checked,
+          is_hidden: $("hide-page").checked,
           display_name: $("display-name").value,
           theme: $("theme").value,
           bio: $("bio").value,

@@ -49,12 +49,32 @@ pub async fn create_page(State(state): State<AppState>) -> Result<Json<CreatedPa
     Err(AppError::Internal(anyhow::anyhow!("could not allocate a unique slug")))
 }
 
+/// Hidden pages exist only behind their share token: any other identifier
+/// (or a missing/wrong bearer) gets a plain 404, so the page is
+/// indistinguishable from one that never existed.
+pub fn require_visible(
+    user: &crate::auth::User,
+    requested: &str,
+    headers: &HeaderMap,
+) -> Result<(), AppError> {
+    if !user.is_hidden || user.share_token.as_deref() == Some(requested) {
+        return Ok(());
+    }
+    if let Some(secret) = auth::bearer(headers)
+        && crypto::verify_secret(&secret, &user.secret_hash)
+    {
+        return Ok(());
+    }
+    Err(AppError::NotFound)
+}
+
 #[derive(Serialize)]
 pub struct PageView {
     pub slug: String,
     /// Public handle for URLs: username when set, else the slug.
     pub handle: String,
     pub username: Option<String>,
+    pub is_hidden: bool,
     pub owner: bool,
     pub default_public: bool,
     pub display_name: Option<String>,
@@ -72,6 +92,7 @@ pub async fn get_page(
     headers: HeaderMap,
 ) -> Result<Json<PageView>, AppError> {
     let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    require_visible(&user, &slug, &headers)?;
 
     let private_key = match auth::bearer(&headers) {
         Some(_) => {
@@ -93,6 +114,7 @@ pub async fn get_page(
     Ok(Json(PageView {
         handle: user.handle().to_string(),
         username: user.username.clone(),
+        is_hidden: user.is_hidden,
         slug: user.slug,
         owner,
         default_public: user.default_public,
@@ -112,6 +134,7 @@ pub const THEMES: &[&str] = &[
 #[derive(Deserialize)]
 pub struct PagePatch {
     pub default_public: Option<bool>,
+    pub is_hidden: Option<bool>,
     /// Optional public name for the page. Empty string clears it. Never part
     /// of the URL — the slug stays random.
     pub display_name: Option<String>,
@@ -147,6 +170,23 @@ pub async fn patch_page(
     if let Some(default_public) = body.default_public {
         sqlx::query("UPDATE users SET default_public = ? WHERE id = ?")
             .bind(default_public)
+            .bind(user.id)
+            .execute(&state.pool)
+            .await?;
+    }
+
+    if let Some(is_hidden) = body.is_hidden {
+        // First hide mints the long share slug; it persists afterwards so
+        // friend links survive hide/unhide cycles.
+        if is_hidden && user.share_token.is_none() {
+            sqlx::query("UPDATE users SET share_token = ? WHERE id = ?")
+                .bind(crypto::generate_secret())
+                .bind(user.id)
+                .execute(&state.pool)
+                .await?;
+        }
+        sqlx::query("UPDATE users SET is_hidden = ? WHERE id = ?")
+            .bind(is_hidden)
             .bind(user.id)
             .execute(&state.pool)
             .await?;
@@ -230,8 +270,10 @@ pub async fn rotate_key(
 pub async fn qr_svg(
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
     let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    require_visible(&user, &slug, &headers)?;
     let url = format!("{}/u/{}", state.config.public_base_url, user.handle());
     let code = qrcode::QrCode::new(url.as_bytes())
         .map_err(|e| AppError::Internal(anyhow::anyhow!("qr encoding failed: {e}")))?;
@@ -347,7 +389,8 @@ pub async fn login(
     let username = body.username.trim().to_lowercase();
     let user = sqlx::query_as::<_, auth::User>(sqlx::AssertSqlSafe(
         "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public, \
-         display_name, bio, favourite_book, theme, username, password_hash, enc_secret \
+         display_name, bio, favourite_book, theme, username, password_hash, enc_secret, \
+         is_hidden, share_token \
          FROM users WHERE username = ?"
             .to_string(),
     ))
