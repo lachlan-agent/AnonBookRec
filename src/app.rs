@@ -25,11 +25,28 @@ pub fn build_app(state: AppState) -> Router {
         .route("/api/users", post(users::create_page))
         .route("/api/pages/{slug}", patch(users::patch_page).delete(users::delete_page))
         .route("/api/pages/{slug}/rotate-key", post(users::rotate_key))
+        .route(
+            "/api/pages/{slug}/credentials",
+            post(users::set_credentials).delete(users::delete_credentials),
+        )
         .route("/api/pages/{slug}/recommendations", post(recommendations::submit_to_page))
         .route(
             "/api/recommendations/{id}",
             patch(recommendations::patch_rec).delete(recommendations::delete_rec),
         );
+
+    // Password guessing gets its own, much stricter per-IP budget on top of
+    // Argon2id's inherent slowness.
+    let mut login_api = Router::new().route("/api/login", post(users::login));
+    if state.config.rate_limiting {
+        let login_governor = GovernorConfigBuilder::default()
+            .key_extractor(SmartIpKeyExtractor)
+            .period(std::time::Duration::from_secs(10)) // refill: 1 attempt / 10 s
+            .burst_size(5)
+            .finish()
+            .expect("valid governor config");
+        login_api = login_api.layer(GovernorLayer::new(Arc::new(login_governor)));
+    }
 
     if state.config.rate_limiting {
         let governor = GovernorConfigBuilder::default()
@@ -59,7 +76,8 @@ pub fn build_app(state: AppState) -> Router {
         HeaderValue::from_static("no-store"),
     );
     read_api = read_api.layer(no_store.clone());
-    write_api = write_api.layer(no_store);
+    write_api = write_api.layer(no_store.clone());
+    login_api = login_api.layer(no_store);
 
     let static_dir = &state.config.static_dir;
     let about_page = ServeFile::new(static_dir.join("about.html"));
@@ -99,6 +117,7 @@ pub fn build_app(state: AppState) -> Router {
     let mut app = Router::new()
         .merge(read_api)
         .merge(write_api)
+        .merge(login_api)
         .route("/u/{slug}", user_page)
         .route_service("/about", about_page)
         .fallback_service(static_files)

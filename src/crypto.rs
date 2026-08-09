@@ -101,6 +101,62 @@ pub fn unseal(private_key: &SecretKey, ciphertext: &[u8]) -> Option<Vec<u8>> {
     private_key.unseal(ciphertext).ok()
 }
 
+/// Argon2id PHC hash for password *verification*. Distinct from the fast
+/// SHA-256 path used for the high-entropy page secret: passwords are guessable
+/// and need a slow hash.
+pub fn hash_password(password: &str) -> anyhow::Result<String> {
+    use argon2::password_hash::{PasswordHasher, SaltString};
+    let salt = SaltString::generate(&mut OsRng);
+    argon2::Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|e| anyhow::anyhow!("password hashing failed: {e}"))
+}
+
+pub fn verify_password(password: &str, phc: &str) -> bool {
+    use argon2::password_hash::{PasswordHash, PasswordVerifier};
+    let Ok(parsed) = PasswordHash::new(phc) else { return false };
+    argon2::Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok()
+}
+
+fn password_key(password: &str, salt: &[u8; 16]) -> ChaCha20Poly1305 {
+    let mut key = [0u8; 32];
+    argon2::Argon2::default()
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .expect("argon2 key derivation cannot fail with valid lengths");
+    ChaCha20Poly1305::new((&key).into())
+}
+
+/// Encrypt the page secret under a password-derived key:
+/// `salt(16) ‖ nonce(12) ‖ ciphertext`. Password login decrypts this to
+/// recover the secret — the secret stays the real credential.
+pub fn wrap_secret_with_password(password: &str, secret: &str) -> Vec<u8> {
+    let mut salt = [0u8; 16];
+    OsRng.fill_bytes(&mut salt);
+    let mut nonce = [0u8; NONCE_LEN];
+    OsRng.fill_bytes(&mut nonce);
+    let ciphertext = password_key(password, &salt)
+        .encrypt(&Nonce::from(nonce), secret.as_bytes())
+        .expect("chacha20poly1305 encryption cannot fail");
+
+    let mut out = salt.to_vec();
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ciphertext);
+    out
+}
+
+pub fn unwrap_secret_with_password(password: &str, wrapped: &[u8]) -> Option<String> {
+    if wrapped.len() < 16 + NONCE_LEN {
+        return None;
+    }
+    let (salt, rest) = wrapped.split_at(16);
+    let (nonce, ciphertext) = rest.split_at(NONCE_LEN);
+    let salt: [u8; 16] = salt.try_into().ok()?;
+    let nonce: [u8; NONCE_LEN] = nonce.try_into().ok()?;
+    let bytes = password_key(password, &salt).decrypt(&Nonce::from(nonce), ciphertext).ok()?;
+    String::from_utf8(bytes).ok()
+}
+
 /// Deterministic blind index over (page, ISBN) keyed by the server pepper, so
 /// duplicate detection works without storing plaintext ISBNs for private rows.
 pub fn blind_index(pepper: &[u8; 32], user_id: Option<i64>, isbn13: &str) -> String {
@@ -140,6 +196,24 @@ mod tests {
         assert_ne!(sealed, b"The Dispossessed");
         let private = unwrap_private_key(&secret, &wrapped).unwrap();
         assert_eq!(unseal(&private, &sealed).unwrap(), b"The Dispossessed");
+    }
+
+    #[test]
+    fn password_verification_roundtrip() {
+        let phc = hash_password("correct horse battery").unwrap();
+        assert!(verify_password("correct horse battery", &phc));
+        assert!(!verify_password("wrong", &phc));
+    }
+
+    #[test]
+    fn password_secret_wrap_roundtrip() {
+        let secret = generate_secret();
+        let wrapped = wrap_secret_with_password("hunter2hunter2", &secret);
+        assert_eq!(
+            unwrap_secret_with_password("hunter2hunter2", &wrapped).as_deref(),
+            Some(secret.as_str())
+        );
+        assert!(unwrap_secret_with_password("wrong-password", &wrapped).is_none());
     }
 
     #[test]

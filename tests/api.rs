@@ -154,6 +154,103 @@ async fn page_creation_and_owner_auth() {
 }
 
 #[tokio::test]
+async fn credentials_login_and_username_urls() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    let creds_url = format!("/api/pages/{slug}/credentials");
+
+    // Validation and auth.
+    let no_auth = call(&app, "POST", &creds_url,
+        Some(json!({"username": "lachy", "password": "longenough"})), None, None).await;
+    assert_eq!(no_auth.status, StatusCode::UNAUTHORIZED);
+    let bad_name = call(&app, "POST", &creds_url,
+        Some(json!({"username": "x", "password": "longenough"})), Some(&secret), None).await;
+    assert_eq!(bad_name.status, StatusCode::BAD_REQUEST);
+    let short_pw = call(&app, "POST", &creds_url,
+        Some(json!({"username": "lachy", "password": "short"})), Some(&secret), None).await;
+    assert_eq!(short_pw.status, StatusCode::BAD_REQUEST);
+
+    // Set credentials (username normalized to lowercase).
+    let set = call(&app, "POST", &creds_url,
+        Some(json!({"username": "  Lachy  ", "password": "longenough"})), Some(&secret), None).await;
+    assert_eq!(set.status, StatusCode::OK);
+    assert_eq!(set.body["handle"], json!("lachy"));
+
+    // Username is now the handle: API + page work by username AND old slug.
+    let by_username = call(&app, "GET", "/api/pages/lachy", None, None, None).await;
+    assert_eq!(by_username.status, StatusCode::OK);
+    assert_eq!(by_username.body["handle"], json!("lachy"));
+    let by_slug = call(&app, "GET", &format!("/api/pages/{slug}"), None, None, None).await;
+    assert_eq!(by_slug.status, StatusCode::OK);
+    let page = call(&app, "GET", "/u/lachy", None, None, None).await;
+    assert_eq!(page.status, StatusCode::OK);
+
+    // Login returns the same secret; wrong creds get a uniform 401.
+    let login = call(&app, "POST", "/api/login",
+        Some(json!({"username": "Lachy", "password": "longenough"})), None, None).await;
+    assert_eq!(login.status, StatusCode::OK);
+    assert_eq!(login.body["secret"], json!(secret));
+    assert_eq!(login.body["handle"], json!("lachy"));
+    let wrong_pw = call(&app, "POST", "/api/login",
+        Some(json!({"username": "lachy", "password": "wrongwrong"})), None, None).await;
+    assert_eq!(wrong_pw.status, StatusCode::UNAUTHORIZED);
+    let no_user = call(&app, "POST", "/api/login",
+        Some(json!({"username": "ghost", "password": "wrongwrong"})), None, None).await;
+    assert_eq!(no_user.status, StatusCode::UNAUTHORIZED);
+
+    // Taken by another page's username or slug → 409.
+    let (slug2, secret2) = create_page(&app).await;
+    let taken = call(&app, "POST", &format!("/api/pages/{slug2}/credentials"),
+        Some(json!({"username": "lachy", "password": "longenough"})), Some(&secret2), None).await;
+    assert_eq!(taken.status, StatusCode::CONFLICT);
+    let slug_clash = call(&app, "POST", &format!("/api/pages/{slug2}/credentials"),
+        Some(json!({"username": slug.to_lowercase(), "password": "longenough"})),
+        Some(&secret2), None).await;
+    // Only conflicts when the lowercased slug happens to match the real slug.
+    if slug == slug.to_lowercase() {
+        assert_eq!(slug_clash.status, StatusCode::CONFLICT);
+    }
+
+    // Removing credentials keeps the username URL but kills password login.
+    let removed = call(&app, "DELETE", &creds_url, None, Some(&secret), None).await;
+    assert_eq!(removed.status, StatusCode::OK);
+    let login = call(&app, "POST", "/api/login",
+        Some(json!({"username": "lachy", "password": "longenough"})), None, None).await;
+    assert_eq!(login.status, StatusCode::UNAUTHORIZED);
+    let page = call(&app, "GET", "/api/pages/lachy", None, None, None).await;
+    assert_eq!(page.status, StatusCode::OK, "username URL survives");
+}
+
+#[tokio::test]
+async fn rotation_disables_password_login_until_reset() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    let creds_url = format!("/api/pages/{slug}/credentials");
+
+    call(&app, "POST", &creds_url,
+        Some(json!({"username": "rotator", "password": "longenough"})), Some(&secret), None).await;
+
+    let rotated = call(&app, "POST", &format!("/api/pages/{slug}/rotate-key"),
+        None, Some(&secret), None).await;
+    assert_eq!(rotated.status, StatusCode::OK);
+    let new_secret = rotated.body["secret"].as_str().unwrap().to_string();
+
+    // Old enc_secret is stale → login refused until credentials are re-set.
+    let login = call(&app, "POST", "/api/login",
+        Some(json!({"username": "rotator", "password": "longenough"})), None, None).await;
+    assert_eq!(login.status, StatusCode::UNAUTHORIZED);
+
+    let reset = call(&app, "POST", &creds_url,
+        Some(json!({"username": "rotator", "password": "longenough"})),
+        Some(&new_secret), None).await;
+    assert_eq!(reset.status, StatusCode::OK);
+    let login = call(&app, "POST", "/api/login",
+        Some(json!({"username": "rotator", "password": "longenough"})), None, None).await;
+    assert_eq!(login.status, StatusCode::OK);
+    assert_eq!(login.body["secret"], json!(new_secret));
+}
+
+#[tokio::test]
 async fn card_page_404s_for_unknown_slug() {
     let (app, _pool) = test_app().await;
     let (slug, _) = create_page(&app).await;

@@ -21,24 +21,40 @@ pub struct User {
     pub bio: Option<String>,
     pub favourite_book: Option<String>,
     pub theme: Option<String>,
+    pub username: Option<String>,
+    pub password_hash: Option<String>,
+    pub enc_secret: Option<Vec<u8>>,
 }
 
+impl User {
+    /// Public handle for URLs: the chosen username, else the random slug.
+    pub fn handle(&self) -> &str {
+        self.username.as_deref().unwrap_or(&self.slug)
+    }
+}
+
+const USER_COLUMNS: &str = "id, slug, secret_hash, public_key, enc_private_key, default_public, \
+                            display_name, bio, favourite_book, theme, username, password_hash, \
+                            enc_secret";
+
+/// Look a page up by its handle: random slug or chosen username. Old slug
+/// URLs keep working after a username is set.
 pub async fn user_by_slug(pool: &SqlitePool, slug: &str) -> Result<Option<User>, AppError> {
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public, display_name, bio, favourite_book, theme
-         FROM users WHERE slug = ?",
-    )
+    // Slugs are case-sensitive base58; usernames are stored lowercase.
+    let user = sqlx::query_as::<_, User>(sqlx::AssertSqlSafe(format!(
+        "SELECT {USER_COLUMNS} FROM users WHERE slug = ?1 OR username = ?2"
+    )))
     .bind(slug)
+    .bind(slug.to_lowercase())
     .fetch_optional(pool)
     .await?;
     Ok(user)
 }
 
 pub async fn user_by_id(pool: &SqlitePool, id: i64) -> Result<Option<User>, AppError> {
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public, display_name, bio, favourite_book, theme
-         FROM users WHERE id = ?",
-    )
+    let user = sqlx::query_as::<_, User>(sqlx::AssertSqlSafe(format!(
+        "SELECT {USER_COLUMNS} FROM users WHERE id = ?"
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await?;

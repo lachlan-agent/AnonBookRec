@@ -52,6 +52,9 @@ pub async fn create_page(State(state): State<AppState>) -> Result<Json<CreatedPa
 #[derive(Serialize)]
 pub struct PageView {
     pub slug: String,
+    /// Public handle for URLs: username when set, else the slug.
+    pub handle: String,
+    pub username: Option<String>,
     pub owner: bool,
     pub default_public: bool,
     pub display_name: Option<String>,
@@ -88,6 +91,8 @@ pub async fn get_page(
     let owner = private_key.is_some();
     let show_profile = owner || user.default_public;
     Ok(Json(PageView {
+        handle: user.handle().to_string(),
+        username: user.username.clone(),
         slug: user.slug,
         owner,
         default_public: user.default_public,
@@ -200,7 +205,10 @@ pub async fn rotate_key(
     // Guard on the old hash so concurrent rotations can't both win; the loser
     // matched 0 rows, meaning the key it presented is already stale.
     let updated = sqlx::query(
-        "UPDATE users SET secret_hash = ?, enc_private_key = ? WHERE id = ? AND secret_hash = ?",
+        // enc_secret is the old secret under the password: stale after
+        // rotation, so password login is disabled until credentials are re-set.
+        "UPDATE users SET secret_hash = ?, enc_private_key = ?, enc_secret = NULL
+         WHERE id = ? AND secret_hash = ?",
     )
     .bind(&new_hash)
     .bind(&rewrapped)
@@ -222,7 +230,7 @@ pub async fn qr_svg(
     Path(slug): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
-    let url = format!("{}/u/{}", state.config.public_base_url, user.slug);
+    let url = format!("{}/u/{}", state.config.public_base_url, user.handle());
     let code = qrcode::QrCode::new(url.as_bytes())
         .map_err(|e| AppError::Internal(anyhow::anyhow!("qr encoding failed: {e}")))?;
     let svg = code
@@ -237,6 +245,124 @@ pub async fn qr_svg(
         ],
         svg,
     ))
+}
+
+#[derive(Deserialize)]
+pub struct CredentialsBody {
+    pub username: String,
+    pub password: String,
+}
+
+fn validate_username(raw: &str) -> Result<String, AppError> {
+    let username = raw.trim().to_lowercase();
+    let ok_chars = username
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-');
+    if username.len() < 3 || username.len() > 32 || !ok_chars {
+        return Err(AppError::BadRequest(
+            "username must be 3–32 characters: a–z, 0–9, _ or -".into(),
+        ));
+    }
+    Ok(username)
+}
+
+/// Attach (or replace) a username + password. The password becomes a second
+/// way to recover the page secret; the secret key remains the backup.
+pub async fn set_credentials(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<CredentialsBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    let secret = auth::require_owner(&user, &headers)?;
+
+    let username = validate_username(&body.username)?;
+    let password_len = body.password.chars().count();
+    if !(8..=128).contains(&password_len) {
+        return Err(AppError::BadRequest("password must be 8–128 characters".into()));
+    }
+
+    // Usernames share the /u/{…} namespace with slugs: collide with neither.
+    let taken: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM users WHERE (username = ?1 OR slug = ?1) AND id != ?2")
+            .bind(&username)
+            .bind(user.id)
+            .fetch_optional(&state.pool)
+            .await?;
+    if taken.is_some() {
+        return Err(AppError::Conflict("that username is taken".into()));
+    }
+
+    let password_hash = crypto::hash_password(&body.password)?;
+    let enc_secret = crypto::wrap_secret_with_password(&body.password, &secret);
+    let result = sqlx::query(
+        "UPDATE users SET username = ?, password_hash = ?, enc_secret = ? WHERE id = ?",
+    )
+    .bind(&username)
+    .bind(&password_hash)
+    .bind(&enc_secret)
+    .bind(user.id)
+    .execute(&state.pool)
+    .await;
+    match result {
+        Ok(_) => Ok(Json(json!({ "username": username, "handle": username }))),
+        Err(sqlx::Error::Database(db)) if db.is_unique_violation() => {
+            Err(AppError::Conflict("that username is taken".into()))
+        }
+        Err(err) => Err(err.into()),
+    }
+}
+
+/// Remove password login. The username (and its URL) survives so shared links
+/// keep working; only the password path is disabled.
+pub async fn delete_credentials(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    auth::require_owner(&user, &headers)?;
+    sqlx::query("UPDATE users SET password_hash = NULL, enc_secret = NULL WHERE id = ?")
+        .bind(user.id)
+        .execute(&state.pool)
+        .await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+pub struct LoginBody {
+    pub username: String,
+    pub password: String,
+}
+
+/// Password login: verify, decrypt the stored secret, hand it to the client.
+/// Uniform 401 on every failure mode — no username enumeration.
+pub async fn login(
+    State(state): State<AppState>,
+    Json(body): Json<LoginBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let username = body.username.trim().to_lowercase();
+    let user = sqlx::query_as::<_, auth::User>(sqlx::AssertSqlSafe(
+        "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public, \
+         display_name, bio, favourite_book, theme, username, password_hash, enc_secret \
+         FROM users WHERE username = ?"
+            .to_string(),
+    ))
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let Some(user) = user else { return Err(AppError::Unauthorized) };
+    let (Some(phc), Some(enc_secret)) = (&user.password_hash, &user.enc_secret) else {
+        return Err(AppError::Unauthorized);
+    };
+    if !crypto::verify_password(&body.password, phc) {
+        return Err(AppError::Unauthorized);
+    }
+    let secret = crypto::unwrap_secret_with_password(&body.password, enc_secret)
+        .ok_or(AppError::Unauthorized)?;
+    Ok(Json(json!({ "handle": user.handle(), "secret": secret })))
 }
 
 /// Permanently delete the page and everything attached to it (owner only).

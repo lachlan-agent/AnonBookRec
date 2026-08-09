@@ -43,6 +43,28 @@ function setStatus(message, isError = false) {
 const showError = (err) => setStatus(err.message, true);
 
 function wireCopyButtons() {
+  $("open-login").addEventListener("click", () => $("login-dialog").showModal());
+  $("close-login").addEventListener("click", () => $("login-dialog").close());
+  $("login-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    $("login-status").textContent = "";
+    try {
+      const result = await api("/api/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: $("login-username").value.trim(),
+          password: $("login-password").value,
+        }),
+      });
+      localStorage.setItem(`abr_secret_${result.handle}`, result.secret);
+      localStorage.setItem("abr_last_slug", result.handle);
+      window.location.href = `/u/${encodeURIComponent(result.handle)}`;
+    } catch (err) {
+      $("login-status").textContent =
+        err.message === "unauthorized" ? "Wrong username or password." : err.message;
+    }
+  });
+
   document.querySelectorAll("[data-copy]").forEach((button) => {
     button.addEventListener("click", async () => {
       await navigator.clipboard.writeText($(button.dataset.copy).textContent);
@@ -359,6 +381,12 @@ async function loadUserPage(slug) {
     for (const [id, value] of Object.entries(fields)) {
       if (document.activeElement !== $(id)) $(id).value = value || "";
     }
+    $("account-current").textContent = page.username
+      ? `Current username: ${page.username}.` : "No username set yet.";
+    if (document.activeElement !== $("account-username")) {
+      $("account-username").value = page.username || "";
+    }
+    $("remove-credentials").hidden = !page.username;
     $("shelf-note").textContent = "your recommendations";
   } else {
     $("page-title").textContent = page.display_name
@@ -547,6 +575,39 @@ function initUser() {
       localStorage.removeItem("abr_last_slug");
     }
     window.location.reload();
+  });
+
+  $("set-credentials").addEventListener("click", async () => {
+    const username = $("account-username").value.trim();
+    const password = $("account-password").value;
+    try {
+      const result = await api(`/api/pages/${encodeURIComponent(slug)}/credentials`, {
+        method: "POST",
+        headers: bearer(secret),
+        body: JSON.stringify({ username, password }),
+      });
+      // The username is now the page's URL: move the stored secret to the new
+      // key (keep the old one so slug URLs still unlock) and switch the URL.
+      localStorage.setItem(`abr_secret_${result.handle}`, secret);
+      localStorage.setItem("abr_last_slug", result.handle);
+      history.replaceState(null, "", `/u/${encodeURIComponent(result.handle)}`);
+      $("account-password").value = "";
+      $("settings-dialog").close();
+      setStatus(`Signed up — your page now lives at /u/${result.handle}.`);
+      await loadUserPage(pageSlug());
+    } catch (err) { showError(err); $("settings-dialog").close(); }
+  });
+
+  $("remove-credentials").addEventListener("click", async () => {
+    try {
+      await api(`/api/pages/${encodeURIComponent(slug)}/credentials`, {
+        method: "DELETE",
+        headers: bearer(secret),
+      });
+      $("settings-dialog").close();
+      setStatus("Password login removed. Your key still works.");
+      await loadUserPage(pageSlug());
+    } catch (err) { showError(err); $("settings-dialog").close(); }
   });
 
   // Deleting is two-step: first click arms the button, second click within

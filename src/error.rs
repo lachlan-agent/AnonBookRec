@@ -11,6 +11,8 @@ pub enum AppError {
     Unauthorized,
     #[error("{0}")]
     BadRequest(String),
+    #[error("{0}")]
+    Conflict(String),
     #[error("could not verify book right now, please try again")]
     Upstream,
     #[error("internal error")]
@@ -29,6 +31,7 @@ impl IntoResponse for AppError {
             AppError::NotFound => StatusCode::NOT_FOUND,
             AppError::Unauthorized => StatusCode::UNAUTHORIZED,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::Upstream => StatusCode::BAD_GATEWAY,
             AppError::Internal(err) => {
                 tracing::error!("internal error: {err:#}");

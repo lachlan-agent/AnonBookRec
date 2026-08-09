@@ -91,6 +91,30 @@
                placeholder="The best book in the world">
       </div>
     </fieldset>
+    <fieldset class="settings-profile">
+      <legend>Account</legend>
+      <p class="owner-hint">
+        Optional username &amp; password so you can sign in from any device.
+        Your secret key stays as the backup — a password can't recover a lost
+        key. <span id="account-current"></span>
+      </p>
+      <div class="settings-field">
+        <label for="account-username">Username</label>
+        <input id="account-username" type="text" maxlength="32"
+               autocomplete="username" placeholder="3–32 chars: a–z, 0–9, _ or -">
+      </div>
+      <div class="settings-field">
+        <label for="account-password">Password</label>
+        <input id="account-password" type="password" maxlength="128"
+               autocomplete="new-password" placeholder="At least 8 characters">
+      </div>
+      <div class="share-row">
+        <button id="set-credentials" class="button small" type="button">Set username &amp; password</button>
+        <button id="remove-credentials" class="button small danger" type="button" hidden>
+          Remove password login
+        </button>
+      </div>
+    </fieldset>
     <div class="dialog-actions">
       <button id="save-settings" class="button primary small" type="button">Save settings</button>
       <button id="logout" class="button small danger" type="button">Sign out</button>

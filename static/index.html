@@ -19,7 +19,10 @@
       Create a page. Share the link. Recommendations can be 
       listed publically on your page, or kept private and encrypted (not even we can see them).
     </p>
-    <button id="create-page" class="button primary">Create your page</button>
+    <div class="hero-actions">
+      <button id="create-page" class="button primary">Create your page</button>
+      <button id="open-login" class="button" type="button">Sign in</button>
+    </div>
     <p id="form-status" class="status" role="status"></p>
     <p id="returning" class="returning" hidden>
       Or return to <a id="returning-link" href="/">your page</a>.
@@ -29,6 +32,33 @@
     </p>
   </section>
 </main>
+
+<dialog id="login-dialog" class="key-dialog settings-dialog">
+  <div class="dialog-head">
+    <h2>Sign in</h2>
+    <button id="close-login" class="icon-button" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <form id="login-form">
+    <div class="settings-field">
+      <label for="login-username">Username</label>
+      <input id="login-username" type="text" maxlength="32" autocomplete="username" required>
+    </div>
+    <div class="settings-field">
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" maxlength="128"
+             autocomplete="current-password" required>
+    </div>
+    <p id="login-status" class="status error" role="status"></p>
+    <button class="button primary small" type="submit">Sign in</button>
+  </form>
+  <p class="owner-hint">
+    Only have your secret key? Open your page link and unlock it there.
+  </p>
+</dialog>
 
 <dialog id="key-dialog" class="key-dialog">
   <h2>Your page is ready</h2>
@@ -44,7 +74,7 @@
   </div>
   <div class="key-warning">
     <p>
-      There is no account and no email, so this key is the only way to manage
+      We do not record emails, so this key is the only way to manage
       your page and read private recommendations. It cannot be recovered or
       reset. Save it somewhere safe before you continue.
     </p>
