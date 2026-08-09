@@ -537,6 +537,21 @@ async fn qr_endpoint_serves_share_url_svg() {
 }
 
 #[tokio::test]
+async fn unknown_paths_get_styled_404() {
+    let (app, _pool) = test_app().await;
+    let request = Request::builder()
+        .method("GET")
+        .uri("/definitely/not/here")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let html = String::from_utf8(bytes.to_vec()).unwrap();
+    assert!(html.contains("Page not found"), "404 body must be the styled page");
+}
+
+#[tokio::test]
 async fn search_returns_suggestions_with_metadata() {
     let (app, _pool) = test_app().await;
 

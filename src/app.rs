@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use axum::extract::DefaultBodyLimit;
-use axum::http::{header, HeaderValue};
-use axum::routing::{get, patch, post};
+use axum::http::{header, HeaderValue, StatusCode};
+use axum::response::Html;
+use axum::routing::{any, get, patch, post};
 use axum::Router;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::key_extractor::SmartIpKeyExtractor;
@@ -63,7 +64,15 @@ pub fn build_app(state: AppState) -> Router {
     let static_dir = &state.config.static_dir;
     let user_page = ServeFile::new(static_dir.join("user.html"));
     let about_page = ServeFile::new(static_dir.join("about.html"));
-    let static_files = ServeDir::new(static_dir);
+    // Unknown paths get the styled 404 page with a real 404 status (serving
+    // the file directly would answer 200). Read once at startup.
+    let not_found_html = std::fs::read_to_string(static_dir.join("404.html"))
+        .unwrap_or_else(|_| "<h1>Page not found</h1>".to_string());
+    let not_found_page = any(move || {
+        let html = not_found_html.clone();
+        async move { (StatusCode::NOT_FOUND, Html(html)) }
+    });
+    let static_files = ServeDir::new(static_dir).not_found_service(not_found_page);
 
     let mut app = Router::new()
         .merge(read_api)
