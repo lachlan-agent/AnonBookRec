@@ -773,6 +773,44 @@ async fn same_book_on_different_pages_is_independent() {
 }
 
 #[tokio::test]
+async fn card_pages_carry_link_preview_meta() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    call(&app, "PATCH", &format!("/api/pages/{slug}"),
+        Some(json!({"display_name": "Lachy <script>"})), Some(&secret), None).await;
+
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/u/{slug}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let html = String::from_utf8_lossy(&bytes).to_string();
+
+    assert!(html.contains("Recommend Lachy &lt;script&gt; a book"), "escaped name in meta");
+    assert!(html.contains(r#"property="og:url""#));
+    assert!(!html.contains("Lachy <script>"), "unescaped name must never appear");
+
+    // Hidden pages keep the generic meta on their friend link.
+    call(&app, "PATCH", &format!("/api/pages/{slug}"),
+        Some(json!({"is_hidden": true})), Some(&secret), None).await;
+    let minted = call(&app, "POST", &format!("/api/pages/{slug}/share-link"),
+        None, Some(&secret), None).await;
+    let token = minted.body["share_token"].as_str().unwrap();
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/u/{token}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let html = String::from_utf8_lossy(&bytes).to_string();
+    assert!(!html.contains("Lachy"), "hidden page must not leak the name in meta");
+    assert!(html.contains(r#"og:title" content="Recommend a book""#));
+}
+
+#[tokio::test]
 async fn friend_link_allows_recommending() {
     let (app, _pool) = test_app().await;
     let (slug, secret) = create_page(&app).await;

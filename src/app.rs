@@ -14,6 +14,39 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use crate::routes::{recommendations, users};
 use crate::state::AppState;
 
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+/// Swap the generic meta block in user.html for a personalized one so link
+/// previews (Instagram, iMessage, Slack…) show whose page it is.
+fn personalize_meta(html: &str, display_name: Option<&str>, url: &str) -> String {
+    let (Some(start), Some(end)) = (html.find("<!--META-->"), html.find("<!--/META-->")) else {
+        return html.to_string();
+    };
+    let title = match display_name {
+        Some(name) => format!("Recommend {} a book", escape_html(name)),
+        None => "Recommend a book".to_string(),
+    };
+    let meta = format!(
+        r#"<!--META-->
+<title>{title}</title>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Suggest a Thing">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="Suggest this reader their next book — anonymously. No account needed.">
+<meta property="og:url" content="{url}">
+<meta name="twitter:card" content="summary">
+"#,
+        url = escape_html(url),
+    );
+    format!("{}{}{}", &html[..start], meta, &html[end..])
+}
+
 pub fn build_app(state: AppState) -> Router {
     let mut read_api = Router::new()
         .route("/api/pages/{slug}", get(users::get_page))
@@ -121,7 +154,23 @@ pub fn build_app(state: AppState) -> Router {
                         if !user.is_hidden
                             || user.share_token.as_deref() == Some(slug.as_str()) =>
                     {
-                        Html(user_html).into_response()
+                        // Personalized link-preview meta (Open Graph). Hidden
+                        // pages keep the generic block — a shared friend link
+                        // shouldn't announce whose page it is.
+                        let html = if user.is_hidden {
+                            user_html
+                        } else {
+                            personalize_meta(
+                                &user_html,
+                                user.display_name.as_deref(),
+                                &format!(
+                                    "{}/u/{}",
+                                    state.config.public_base_url,
+                                    user.handle()
+                                ),
+                            )
+                        };
+                        Html(html).into_response()
                     }
                     Ok(Some(_)) | Ok(None) => {
                         (StatusCode::NOT_FOUND, Html(not_found_html)).into_response()
