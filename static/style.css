@@ -46,6 +46,11 @@ body[data-theme="garnet"] {
 
 * { box-sizing: border-box; }
 
+input, textarea {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 body {
   margin: 0;
   background: var(--paper);
@@ -427,7 +432,10 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
 }
 
 @media (max-width: 480px) {
+  /* iOS zooms the page when focusing any control under 16px */
+  input, textarea, select { font-size: 16px !important; }
   .recommend-form { flex-direction: column; }
+  .confirm-info { flex: 1 1 100%; }
   .rec-count { margin-left: 0; }
   .confirm-card { flex-wrap: wrap; }
   .confirm-actions {
