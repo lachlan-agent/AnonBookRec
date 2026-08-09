@@ -96,9 +96,6 @@
   </dialog>
 
   <section class="shelf">
-    <div class="card-head">
-      <span class="card-note" id="shelf-note"></span>
-    </div>
     <form id="recommend-form" class="recommend-form">
       <div class="search-wrap">
         <input id="book-input" name="book" type="text" maxlength="256" required
@@ -123,6 +120,9 @@
       </div>
     </div>
     <p id="form-status" class="status" role="status"></p>
+    <div class="card-head">
+      <span class="card-note" id="shelf-note"></span>
+    </div>
     <ol id="rec-list" class="card-list" aria-label="Recommended books"></ol>
     <p id="empty-shelf" class="empty" hidden>
       Nothing here yet. Recommend the first book.
