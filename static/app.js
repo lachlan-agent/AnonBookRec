@@ -577,9 +577,24 @@ function initUser() {
     window.location.reload();
   });
 
-  $("set-credentials").addEventListener("click", async () => {
+  // Account feedback stays inside the dialog: closing it on error would
+  // swallow the message, and silent success feels like a dead button.
+  const accountStatus = (message, isError = false) => {
+    $("account-status").textContent = message;
+    $("account-status").classList.toggle("error", isError);
+  };
+
+  $("set-credentials").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
     const username = $("account-username").value.trim();
     const password = $("account-password").value;
+    if (!username || !password) {
+      accountStatus("Enter both a username and a password.", true);
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "Saving…";
+    accountStatus("");
     try {
       const result = await api(`/api/pages/${encodeURIComponent(slug)}/credentials`, {
         method: "POST",
@@ -592,22 +607,34 @@ function initUser() {
       localStorage.setItem("abr_last_slug", result.handle);
       history.replaceState(null, "", `/u/${encodeURIComponent(result.handle)}`);
       $("account-password").value = "";
-      $("settings-dialog").close();
-      setStatus(`Signed up — your page now lives at /u/${result.handle}.`);
+      button.textContent = "Saved ✓";
+      accountStatus(`You can now sign in as “${result.handle}” — your page lives at /u/${result.handle}.`);
+      setStatus(`Password login enabled for ${result.handle}.`);
       await loadUserPage(pageSlug());
-    } catch (err) { showError(err); $("settings-dialog").close(); }
+      setTimeout(() => { button.textContent = "Set username & password"; }, 2000);
+    } catch (err) {
+      button.textContent = "Set username & password";
+      accountStatus(err.message, true);
+    } finally {
+      button.disabled = false;
+    }
   });
 
-  $("remove-credentials").addEventListener("click", async () => {
+  $("remove-credentials").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
     try {
       await api(`/api/pages/${encodeURIComponent(slug)}/credentials`, {
         method: "DELETE",
         headers: bearer(secret),
       });
-      $("settings-dialog").close();
-      setStatus("Password login removed. Your key still works.");
+      accountStatus("Password login removed. Your key still works, and your page URL is unchanged.");
       await loadUserPage(pageSlug());
-    } catch (err) { showError(err); $("settings-dialog").close(); }
+    } catch (err) {
+      accountStatus(err.message, true);
+    } finally {
+      button.disabled = false;
+    }
   });
 
   // Deleting is two-step: first click arms the button, second click within
