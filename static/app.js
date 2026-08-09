@@ -133,7 +133,7 @@ function ownerControls(rec, secret, slug) {
   controls.append(
     button(rec.read ? "Mark unread" : "Mark read", "button small",
       () => patch({ read: !rec.read })),
-    button(rec.is_public ? "Seal" : "Reveal", "button small",
+    button(rec.is_public ? "Hide" : "Reveal", "button small",
       () => patch({ is_public: !rec.is_public })),
     button("Remove", "button small danger", async () => {
       await api(`/api/recommendations/${rec.id}`, {
