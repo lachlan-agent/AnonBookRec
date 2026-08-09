@@ -29,7 +29,9 @@ async function api(path, options = {}) {
   let data = null;
   try { data = await response.json(); } catch { /* non-JSON error body */ }
   if (!response.ok) {
-    throw new Error((data && data.error) || `Request failed (${response.status})`);
+    const error = new Error((data && data.error) || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -424,6 +426,17 @@ function initUser() {
   const secret = localStorage.getItem(`abr_secret_${slug}`);
 
   loadUserPage(slug).catch((err) => {
+    if (err.status === 404) {
+      // The page is gone (or hidden and our key is stale): any stored key is
+      // useless now. Drop it and let the server's real 404 page answer —
+      // removing the key also breaks the 404→unlock redirect loop.
+      localStorage.removeItem(`abr_secret_${slug}`);
+      if (localStorage.getItem("abr_last_slug") === slug) {
+        localStorage.removeItem("abr_last_slug");
+      }
+      window.location.replace(`/u/${encodeURIComponent(slug)}`);
+      return;
+    }
     $("page-title").textContent = "Page not found";
     $("recommend-form").hidden = true;
     showError(err);
@@ -741,6 +754,12 @@ function initUser() {
   // The public profile only exists for public pages.
   $("default-public").addEventListener("change", (event) => {
     $("profile-fields").disabled = !event.target.checked;
+  });
+
+  // Reveal the friend-link controls as soon as hiding is ticked — no need to
+  // save and reopen the dialog first.
+  $("hide-page").addEventListener("change", (event) => {
+    $("share-zone").hidden = !event.target.checked;
   });
 
   $("save-settings").addEventListener("click", async () => {
