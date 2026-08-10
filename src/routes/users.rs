@@ -12,41 +12,67 @@ use crate::routes::recommendations::{load_recommendations, RecommendationView};
 use crate::state::AppState;
 
 #[derive(Serialize)]
-pub struct CreatedPage {
+pub struct DraftPage {
     pub slug: String,
     pub secret: String,
     pub url: String,
+    /// HMAC over (slug, secret) proving this draft was issued by us. Sent
+    /// back on confirm; nothing is stored server-side in the meantime.
+    pub token: String,
 }
 
-/// Create an anonymous page. The secret is returned exactly once and only its
-/// hash is stored.
-pub async fn create_page(State(state): State<AppState>) -> Result<Json<CreatedPage>, AppError> {
+/// Stage a page without touching the database. The client shows the secret,
+/// makes the person confirm they saved it, and only then confirms creation
+/// via [`create_page`]. An abandoned draft leaves no trace.
+pub async fn draft_page(State(state): State<AppState>) -> Json<DraftPage> {
     let secret = crypto::generate_secret();
-    let secret_hash = crypto::hash_secret(&secret);
-    let (public_key, enc_private_key) = crypto::new_page_keys(&secret);
+    let slug = crypto::generate_slug();
+    let token = crypto::draft_token(&state.config.pepper, &slug, &secret);
+    let url = format!("{}/u/{}", state.config.public_base_url, slug);
+    Json(DraftPage { slug, secret, url, token })
+}
 
-    // Retry on the (astronomically unlikely) slug collision.
-    for _ in 0..3 {
-        let slug = crypto::generate_slug();
-        let result = sqlx::query(
-            "INSERT INTO users (slug, secret_hash, public_key, enc_private_key) VALUES (?, ?, ?, ?)",
-        )
-        .bind(&slug)
-        .bind(&secret_hash)
-        .bind(&public_key)
-        .bind(&enc_private_key)
-        .execute(&state.pool)
-        .await;
-        match result {
-            Ok(_) => {
-                let url = format!("{}/u/{}", state.config.public_base_url, slug);
-                return Ok(Json(CreatedPage { slug, secret, url }));
-            }
-            Err(sqlx::Error::Database(db)) if db.is_unique_violation() => continue,
-            Err(err) => return Err(err.into()),
-        }
+#[derive(Deserialize)]
+pub struct CreatePageBody {
+    pub slug: String,
+    pub secret: String,
+    pub token: String,
+}
+
+/// Create the page a draft described, once the owner has confirmed saving
+/// the secret. The token gate means only server-issued (slug, secret) pairs
+/// are accepted; only the secret's hash is stored.
+pub async fn create_page(
+    State(state): State<AppState>,
+    Json(body): Json<CreatePageBody>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if !crypto::verify_draft_token(&state.config.pepper, &body.slug, &body.secret, &body.token) {
+        return Err(AppError::Unauthorized);
     }
-    Err(AppError::Internal(anyhow::anyhow!("could not allocate a unique slug")))
+    let secret_hash = crypto::hash_secret(&body.secret);
+    let (public_key, enc_private_key) = crypto::new_page_keys(&body.secret);
+
+    let result = sqlx::query(
+        "INSERT INTO users (slug, secret_hash, public_key, enc_private_key) VALUES (?, ?, ?, ?)",
+    )
+    .bind(&body.slug)
+    .bind(&secret_hash)
+    .bind(&public_key)
+    .bind(&enc_private_key)
+    .execute(&state.pool)
+    .await;
+    match result {
+        Ok(_) => {
+            let url = format!("{}/u/{}", state.config.public_base_url, body.slug);
+            Ok(Json(json!({ "slug": body.slug, "url": url })))
+        }
+        // Replaying a confirmed draft (double-click, retry) or the
+        // astronomically unlikely slug collision.
+        Err(sqlx::Error::Database(db)) if db.is_unique_violation() => {
+            Err(AppError::Conflict("that page already exists — request a new one".into()))
+        }
+        Err(err) => Err(err.into()),
+    }
 }
 
 /// Hidden pages exist only behind their share token: any other identifier

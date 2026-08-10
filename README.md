@@ -98,7 +98,8 @@ WantedBy=multi-user.target
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/users` | — | Make a page. The result is `{slug, secret, url}`. The system shows the secret one time only |
+| POST | `/api/users/draft` | — | Stage a page: `{slug, secret, url, token}`. No database write — an abandoned draft leaves no trace. The system shows the secret one time only |
+| POST | `/api/users` | — | Create the drafted page after the owner confirms saving the key. Body `{slug, secret, token}`; the HMAC token proves the draft came from the server |
 | GET | `/api/pages/{slug}` | optional bearer | Get the public recommendations. The owner also gets the sealed recommendations, in decrypted form |
 | PATCH | `/api/pages/{slug}` | bearer | Set `default_public` and/or the optional profile fields (`display_name`, `bio`, `favourite_book`, `theme`). The name is not a part of the URL |
 | GET | `/api/search?q=` | — | Get typeahead suggestions (title, author, year, ISBN, cover id) |

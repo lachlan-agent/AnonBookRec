@@ -126,13 +126,57 @@ async fn call(
     TestResponse { status, body, cookie }
 }
 
+/// Full two-phase creation: draft, then confirm (as the frontend does after
+/// "I saved my key").
 async fn create_page(app: &Router) -> (String, String) {
-    let response = call(app, "POST", "/api/users", None, None, None).await;
-    assert_eq!(response.status, StatusCode::OK);
-    (
-        response.body["slug"].as_str().unwrap().to_string(),
-        response.body["secret"].as_str().unwrap().to_string(),
-    )
+    let draft = call(app, "POST", "/api/users/draft", None, None, None).await;
+    assert_eq!(draft.status, StatusCode::OK);
+    let slug = draft.body["slug"].as_str().unwrap().to_string();
+    let secret = draft.body["secret"].as_str().unwrap().to_string();
+
+    let confirmed = call(app, "POST", "/api/users",
+        Some(json!({"slug": slug, "secret": secret, "token": draft.body["token"]})),
+        None, None).await;
+    assert_eq!(confirmed.status, StatusCode::OK);
+    (slug, secret)
+}
+
+#[tokio::test]
+async fn draft_creates_nothing_until_confirmed() {
+    let (app, pool) = test_app().await;
+
+    // Draft alone (dialog dismissed): no row.
+    let draft = call(&app, "POST", "/api/users/draft", None, None, None).await;
+    assert_eq!(draft.status, StatusCode::OK);
+    let slug = draft.body["slug"].as_str().unwrap().to_string();
+    let (count,): (i64,) = sqlx::query_as("SELECT count(*) FROM users")
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 0, "a draft must not create a page");
+    let missing = call(&app, "GET", &format!("/api/pages/{slug}"), None, None, None).await;
+    assert_eq!(missing.status, StatusCode::NOT_FOUND);
+
+    // Forged or tampered confirmation is rejected.
+    let forged = call(&app, "POST", "/api/users",
+        Some(json!({"slug": slug, "secret": draft.body["secret"], "token": "not-a-token"})),
+        None, None).await;
+    assert_eq!(forged.status, StatusCode::UNAUTHORIZED);
+    let swapped = call(&app, "POST", "/api/users",
+        Some(json!({"slug": "myvanityslug", "secret": draft.body["secret"],
+                    "token": draft.body["token"]})),
+        None, None).await;
+    assert_eq!(swapped.status, StatusCode::UNAUTHORIZED, "token must bind the slug");
+
+    // Real confirmation creates the page; replaying it conflicts.
+    let confirmed = call(&app, "POST", "/api/users",
+        Some(json!({"slug": slug, "secret": draft.body["secret"], "token": draft.body["token"]})),
+        None, None).await;
+    assert_eq!(confirmed.status, StatusCode::OK);
+    let exists = call(&app, "GET", &format!("/api/pages/{slug}"), None, None, None).await;
+    assert_eq!(exists.status, StatusCode::OK);
+    let replay = call(&app, "POST", "/api/users",
+        Some(json!({"slug": slug, "secret": draft.body["secret"], "token": draft.body["token"]})),
+        None, None).await;
+    assert_eq!(replay.status, StatusCode::CONFLICT);
 }
 
 #[tokio::test]

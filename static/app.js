@@ -663,13 +663,17 @@ function initIndex() {
 
   let createdPage = null;
 
+  // Two-phase creation: the click only fetches a draft (slug + secret +
+  // signed token) — nothing exists server-side yet. The page is created when
+  // "Go to my page" confirms the key was saved; an abandoned dialog leaves
+  // no orphan page behind.
   $("create-page").addEventListener("click", async () => {
     try {
-      createdPage = await api("/api/users", { method: "POST" });
-      localStorage.setItem(`abr_secret_${createdPage.slug}`, createdPage.secret);
-      localStorage.setItem("abr_last_slug", createdPage.slug);
+      createdPage = await api("/api/users/draft", { method: "POST" });
       $("page-url").textContent = createdPage.url;
       $("secret-key").textContent = createdPage.secret;
+      $("key-saved").checked = false;
+      $("go-to-page").disabled = true;
       $("key-dialog").showModal();
     } catch (err) { showError(err); }
   });
@@ -688,8 +692,29 @@ function initIndex() {
   $("key-saved").addEventListener("change", (event) => {
     $("go-to-page").disabled = !event.target.checked;
   });
-  $("go-to-page").addEventListener("click", () => {
-    if (createdPage) window.location.href = `/u/${createdPage.slug}`;
+  $("go-to-page").addEventListener("click", async (event) => {
+    if (!createdPage) return;
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = "Creating…";
+    try {
+      await api("/api/users", {
+        method: "POST",
+        body: JSON.stringify({
+          slug: createdPage.slug,
+          secret: createdPage.secret,
+          token: createdPage.token,
+        }),
+      });
+      localStorage.setItem(`abr_secret_${createdPage.slug}`, createdPage.secret);
+      localStorage.setItem("abr_last_slug", createdPage.slug);
+      window.location.href = `/u/${createdPage.slug}`;
+    } catch (err) {
+      button.textContent = "Go to my page";
+      button.disabled = false;
+      $("key-dialog").close();
+      showError(err);
+    }
   });
 
   wireCopyButtons();
@@ -785,7 +810,7 @@ async function renderBans(slug, secret) {
   for (const ban of result.bans) {
     const item = el("li");
     item.append(el("span", "rec-title", ban.title || ban.isbn),
-                el("span", "rec-isbn", `ISBN ${ban.isbn}`));
+      el("span", "rec-isbn", `ISBN ${ban.isbn}`));
     const unbanButton = el("button", "button small", "Unban");
     unbanButton.type = "button";
     unbanButton.addEventListener("click", async () => {
@@ -842,8 +867,8 @@ async function refreshQr(slug, secret, page) {
     $("qr-image").src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     $("qr-note").textContent = page.is_hidden
       ? (page.share_token
-          ? "QR points to your friend link."
-          : "QR points to your page's normal address — while hidden, only you can open it. Create a friend link to make the QR shareable.")
+        ? "QR points to your friend link."
+        : "QR points to your page's normal address — while hidden, only you can open it. Create a friend link to make the QR shareable.")
       : "QR points to your public page link.";
   } catch {
     $("qr-note").textContent = "Couldn't load the QR code.";
@@ -857,7 +882,7 @@ async function loadUserPage(slug) {
   });
 
   currentPage = page;
-  if (page.owner) renderBans(slug, secret).catch(() => {});
+  if (page.owner) renderBans(slug, secret).catch(() => { });
   $("unlock-panel").hidden = page.owner || Boolean(secret);
   applyStyle(page);
   const rss = $("rss-link");

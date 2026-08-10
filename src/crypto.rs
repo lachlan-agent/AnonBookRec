@@ -157,6 +157,20 @@ pub fn unwrap_secret_with_password(password: &str, wrapped: &[u8]) -> Option<Str
     String::from_utf8(bytes).ok()
 }
 
+/// Unforgeable token binding a draft page (slug + secret) to this server, so
+/// page creation can wait for an explicit confirm request without any
+/// server-side draft state: the token proves the pair was issued by us.
+pub fn draft_token(pepper: &[u8; 32], slug: &str, secret: &str) -> String {
+    let mut mac =
+        <Hmac<Sha256> as Mac>::new_from_slice(pepper).expect("hmac accepts any key length");
+    mac.update(format!("page-draft:{slug}:{}", hash_secret(secret)).as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+pub fn verify_draft_token(pepper: &[u8; 32], slug: &str, secret: &str, token: &str) -> bool {
+    draft_token(pepper, slug, secret).as_bytes().ct_eq(token.as_bytes()).into()
+}
+
 /// Deterministic blind index over (page, ISBN) keyed by the server pepper, so
 /// duplicate detection works without storing plaintext ISBNs for private rows.
 pub fn blind_index(pepper: &[u8; 32], user_id: Option<i64>, isbn13: &str) -> String {
