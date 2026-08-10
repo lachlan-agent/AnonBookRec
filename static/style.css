@@ -403,6 +403,45 @@ body[data-density="compact"] .card-list li { padding: 0.35rem 0.1rem; }
 body[data-density="compact"] .hero h1 { font-size: clamp(1.5rem, 4.5vw, 2.1rem); }
 body[data-density="compact"] .page-bio { margin-bottom: 0.6rem; }
 
+/* Custom dropdowns (native select popups can't preview on hover) */
+.custom-select { position: relative; }
+.custom-select-btn {
+  width: 100%;
+  text-align: left;
+  font: 0.9rem var(--sans);
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-s);
+  background: var(--field);
+  color: var(--ink);
+  cursor: pointer;
+}
+.custom-select-btn::after { content: " ▾"; color: var(--ink-soft); float: right; }
+.custom-options {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--field);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-s);
+  box-shadow: 0 4px 14px rgba(34, 38, 43, 0.18);
+  max-height: 14rem;
+  overflow-y: auto;
+}
+.custom-options li {
+  padding: 0.3rem 0.55rem;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.custom-options li:hover,
+.custom-options li.active { background: color-mix(in srgb, var(--cloth) 14%, transparent); }
+
 /* Settings tabs */
 .tab-row { display: flex; gap: 0.3rem; margin-bottom: 0.9rem; border-bottom: 1px solid var(--rule); }
 .tab-button {

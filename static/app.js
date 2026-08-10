@@ -696,6 +696,74 @@ function pageSlug() {
 /* Latest page state, for handlers that need more than the slug. */
 let currentPage = null;
 
+/* Custom dropdown replacing a native select: identical value contract (the
+   select stays in the DOM, hidden, holding the value for save/load), but the
+   popup is ours, so hovering an option live-previews it. Mouse-out or Esc
+   reverts; click commits. */
+const selectSyncers = {};
+
+function enhanceSelect(id, onPreview) {
+  const select = $(id);
+  if (!select || select.dataset.enhanced) return;
+  select.dataset.enhanced = "1";
+  select.style.display = "none";
+
+  const wrap = el("div", "custom-select");
+  const btn = el("button", "custom-select-btn");
+  btn.type = "button";
+  btn.setAttribute("aria-haspopup", "listbox");
+  const list = el("ul", "custom-options");
+  list.hidden = true;
+  list.role = "listbox";
+  select.after(wrap);
+  wrap.append(btn, list);
+
+  const labelFor = (value) =>
+    [...select.options].find((o) => o.value === value)?.textContent || "";
+  const syncLabel = () => { btn.textContent = labelFor(select.value); };
+  selectSyncers[id] = syncLabel;
+  syncLabel();
+
+  let original = select.value;
+  const closeList = (revert) => {
+    if (revert) { select.value = original; onPreview(); syncLabel(); }
+    list.hidden = true;
+  };
+
+  btn.addEventListener("click", () => {
+    if (!list.hidden) { closeList(true); return; }
+    original = select.value;
+    list.replaceChildren();
+    for (const option of select.options) {
+      const item = el("li", option.value === select.value ? "active" : "", option.textContent);
+      item.role = "option";
+      item.dataset.value = option.value;
+      item.addEventListener("mouseenter", () => {
+        select.value = option.value;
+        onPreview();
+      });
+      item.addEventListener("click", () => {
+        select.value = option.value;
+        original = option.value;
+        onPreview();
+        syncLabel();
+        closeList(false);
+      });
+      list.append(item);
+    }
+    list.hidden = false;
+  });
+  list.addEventListener("mouseleave", () => {
+    if (!list.hidden) { select.value = original; onPreview(); }
+  });
+  btn.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !list.hidden) closeList(true);
+  });
+  document.addEventListener("click", (event) => {
+    if (!wrap.contains(event.target) && !list.hidden) closeList(true);
+  });
+}
+
 /* Apply a style bundle (theme, font, corners, density, accent) to the page.
    Used both for saved state and for live preview while the Theme tab is
    being fiddled with. */
@@ -787,6 +855,7 @@ async function loadUserPage(slug) {
     for (const [id, value] of Object.entries(fields)) {
       if (document.activeElement !== $(id)) $(id).value = value || "";
     }
+    for (const id of ["theme", "font", "radius", "density"]) selectSyncers[id]?.();
     $("hide-page").checked = page.is_hidden;
     $("share-zone").hidden = !page.is_hidden;
     const hasLink = Boolean(page.share_token);
@@ -874,6 +943,9 @@ function initUser() {
   });
   for (const id of ["theme", "font", "radius", "density", "accent-on"]) {
     $(id).addEventListener("change", previewStyle);
+  }
+  for (const id of ["theme", "font", "radius", "density"]) {
+    enhanceSelect(id, previewStyle);
   }
   $("accent-color").addEventListener("input", () => {
     $("accent-on").checked = true;
