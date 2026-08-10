@@ -848,3 +848,109 @@ async fn friend_link_allows_recommending() {
         Some(json!({"book_name": "9780134685991"})), Some(&secret), None).await;
     assert_eq!(owner_submit.status, StatusCode::OK, "body: {:?}", owner_submit.body);
 }
+
+#[tokio::test]
+async fn banning_removes_and_blocks_resubmission() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    let submit_url = format!("/api/pages/{slug}/recommendations");
+    let body = json!({"book_name": "The Dispossessed"});
+
+    call(&app, "POST", &submit_url, Some(body.clone()), None, None).await;
+    let page = call(&app, "GET", &format!("/api/pages/{slug}"), None, Some(&secret), None).await;
+    let rec_id = page.body["recommendations"][0]["id"].as_i64().unwrap();
+
+    let denied = call(&app, "POST", &format!("/api/recommendations/{rec_id}/ban"),
+        None, None, None).await;
+    assert_eq!(denied.status, StatusCode::UNAUTHORIZED);
+
+    let banned = call(&app, "POST", &format!("/api/recommendations/{rec_id}/ban"),
+        None, Some(&secret), None).await;
+    assert_eq!(banned.status, StatusCode::OK);
+    assert_eq!(banned.body["isbn"], json!(TITLE_MATCH_ISBN));
+
+    // Rec gone, resubmission rejected, ban listed.
+    let page = call(&app, "GET", &format!("/api/pages/{slug}"), None, Some(&secret), None).await;
+    assert_eq!(page.body["recommendations"].as_array().unwrap().len(), 0);
+    let again = call(&app, "POST", &submit_url, Some(body.clone()), None, None).await;
+    assert_eq!(again.status, StatusCode::BAD_REQUEST);
+    let bans = call(&app, "GET", &format!("/api/pages/{slug}/bans"), None, Some(&secret), None).await;
+    assert_eq!(bans.body["bans"][0]["isbn"], json!(TITLE_MATCH_ISBN));
+
+    // Unban restores submissions.
+    let unbanned = call(&app, "DELETE",
+        &format!("/api/pages/{slug}/bans/{TITLE_MATCH_ISBN}"), None, Some(&secret), None).await;
+    assert_eq!(unbanned.status, StatusCode::OK);
+    let again = call(&app, "POST", &submit_url, Some(body), None, None).await;
+    assert_eq!(again.body["status"], json!("created"));
+}
+
+#[tokio::test]
+async fn rss_feed_lists_public_recs_only() {
+    let (app, _pool) = test_app().await;
+    let (slug, secret) = create_page(&app).await;
+    call(&app, "POST", &format!("/api/pages/{slug}/recommendations"),
+        Some(json!({"book_name": "The Dispossessed"})), None, None).await;
+
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/u/{slug}/feed.xml"))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let content_type = response.headers().get(header::CONTENT_TYPE).unwrap().to_str().unwrap().to_string();
+    assert!(content_type.starts_with("application/rss+xml"));
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let xml = String::from_utf8_lossy(&bytes).to_string();
+    assert!(xml.contains("The Dispossessed — Ursula K. Le Guin"));
+    assert!(xml.contains("<pubDate>"));
+
+    // Hidden page: canonical feed 404s.
+    call(&app, "PATCH", &format!("/api/pages/{slug}"),
+        Some(json!({"is_hidden": true})), Some(&secret), None).await;
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/u/{slug}/feed.xml"))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn resolver_cache_prevents_repeat_lookups() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct CountingResolver(AtomicUsize);
+    #[async_trait::async_trait]
+    impl BookResolver for CountingResolver {
+        async fn by_isbn(&self, isbn13: &str) -> Result<Option<ResolvedBook>, ResolverError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(ResolvedBook {
+                title: "Counted".into(),
+                isbn13: isbn13.to_string(),
+                author: None,
+            }))
+        }
+        async fn by_title(&self, _: &str) -> Result<Option<ResolvedBook>, ResolverError> {
+            Ok(None)
+        }
+        async fn search(&self, _: &str) -> Result<Vec<BookSuggestion>, ResolverError> {
+            Ok(Vec::new())
+        }
+    }
+
+    let options = SqliteConnectOptions::from_str("sqlite::memory:").unwrap();
+    let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.unwrap();
+    MIGRATOR.run(&pool).await.unwrap();
+
+    let counter = Arc::new(CountingResolver(AtomicUsize::new(0)));
+    let cached = anonbookrec::resolver::CachingResolver::new(counter.clone(), pool);
+
+    for _ in 0..3 {
+        let hit = cached.by_isbn(KNOWN_ISBN).await.unwrap().unwrap();
+        assert_eq!(hit.title, "Counted");
+    }
+    assert_eq!(counter.0.load(Ordering::SeqCst), 1, "only the first lookup hits upstream");
+}

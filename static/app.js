@@ -479,6 +479,14 @@ function ownerControls(rec, secret, slug) {
       });
       await loadUserPage(slug);
     }),
+    button("Ban", "button small danger", async () => {
+      const result = await api(`/api/recommendations/${rec.id}/ban`, {
+        method: "POST",
+        headers: bearer(secret),
+      });
+      setStatus(`Banned “${result.title || result.isbn}” — future submissions rejected.`);
+      await loadUserPage(slug);
+    }),
   );
   return controls;
 }
@@ -764,6 +772,34 @@ function enhanceSelect(id, onPreview) {
   });
 }
 
+/* Owner's banned-books list in settings, with unban buttons. */
+async function renderBans(slug, secret) {
+  const zone = $("ban-zone");
+  const list = $("ban-list");
+  if (!zone || !list) return;
+  const result = await api(`/api/pages/${encodeURIComponent(slug)}/bans`, {
+    headers: bearer(secret),
+  });
+  zone.hidden = result.bans.length === 0;
+  list.replaceChildren();
+  for (const ban of result.bans) {
+    const item = el("li");
+    item.append(el("span", "rec-title", ban.title || ban.isbn),
+                el("span", "rec-isbn", `ISBN ${ban.isbn}`));
+    const unbanButton = el("button", "button small", "Unban");
+    unbanButton.type = "button";
+    unbanButton.addEventListener("click", async () => {
+      await api(`/api/pages/${encodeURIComponent(slug)}/bans/${encodeURIComponent(ban.isbn)}`, {
+        method: "DELETE",
+        headers: bearer(secret),
+      });
+      await renderBans(slug, secret);
+    });
+    item.append(unbanButton);
+    list.append(item);
+  }
+}
+
 /* Apply a style bundle (theme, font, corners, density, accent) to the page.
    Used both for saved state and for live preview while the Theme tab is
    being fiddled with. */
@@ -821,8 +857,15 @@ async function loadUserPage(slug) {
   });
 
   currentPage = page;
+  if (page.owner) renderBans(slug, secret).catch(() => {});
   $("unlock-panel").hidden = page.owner || Boolean(secret);
   applyStyle(page);
+  const rss = $("rss-link");
+  if (rss) {
+    const showFeed = !page.is_hidden || page.owner;
+    rss.hidden = !showFeed;
+    rss.href = `/u/${encodeURIComponent(pageSlug())}/feed.xml`;
+  }
   $("page-bio").hidden = !page.bio;
   $("page-bio").textContent = page.bio || "";
   $("page-fav").hidden = !page.favourite_book;

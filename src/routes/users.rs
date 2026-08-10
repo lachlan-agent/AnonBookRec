@@ -503,6 +503,113 @@ pub async fn login(
     Ok(Json(json!({ "handle": user.handle(), "secret": secret })))
 }
 
+pub async fn list_bans(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    auth::require_owner(&user, &headers)?;
+    let bans: Vec<(String, Option<String>)> = sqlx::query_as(
+        "SELECT isbn, title FROM user_book_blacklist WHERE user_id = ? ORDER BY rowid DESC",
+    )
+    .bind(user.id)
+    .fetch_all(&state.pool)
+    .await?;
+    let bans: Vec<_> = bans
+        .into_iter()
+        .map(|(isbn, title)| json!({ "isbn": isbn, "title": title }))
+        .collect();
+    Ok(Json(json!({ "bans": bans })))
+}
+
+pub async fn unban(
+    State(state): State<AppState>,
+    Path((slug, isbn)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    auth::require_owner(&user, &headers)?;
+    sqlx::query("DELETE FROM user_book_blacklist WHERE user_id = ? AND isbn = ?")
+        .bind(user.id)
+        .bind(&isbn)
+        .execute(&state.pool)
+        .await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+fn escape_xml(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+/// RSS 2.0 feed of a page's public recommendations. Follows the same
+/// visibility rules as the page itself (hidden pages: share-token URL only).
+pub async fn feed(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, AppError> {
+    let user = auth::user_by_slug(&state.pool, &slug).await?.ok_or(AppError::NotFound)?;
+    require_visible(&user, &slug, &headers)?;
+
+    let rows: Vec<(i64, String, Option<String>, String, String)> = sqlx::query_as(
+        "SELECT id, book_name, author, isbn, timestamp FROM recommendations
+         WHERE user_id = ? AND is_public = 1
+         ORDER BY timestamp DESC, id DESC LIMIT 50",
+    )
+    .bind(user.id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let page_url = format!("{}/u/{}", state.config.public_base_url, slug);
+    let page_title = match user.display_name.as_deref() {
+        Some(name) => format!("{name}'s book recommendations"),
+        None => "Book recommendations".to_string(),
+    };
+
+    let format = time::format_description::well_known::Rfc2822;
+    let sqlite_format = time::macros::format_description!(
+        "[year]-[month]-[day] [hour]:[minute]:[second]"
+    );
+    let mut items = String::new();
+    for (id, title, author, isbn, timestamp) in rows {
+        let pub_date = time::PrimitiveDateTime::parse(&timestamp, &sqlite_format)
+            .ok()
+            .and_then(|dt| dt.assume_utc().format(&format).ok())
+            .unwrap_or_default();
+        let item_title = match &author {
+            Some(author) => format!("{title} — {author}"),
+            None => title.clone(),
+        };
+        items.push_str(&format!(
+            "<item><title>{}</title><link>{}</link>\
+             <guid isPermaLink=\"false\">rec-{id}-{}</guid>\
+             <pubDate>{}</pubDate>\
+             <description>ISBN {}</description></item>",
+            escape_xml(&item_title),
+            escape_xml(&page_url),
+            escape_xml(&isbn),
+            escape_xml(&pub_date),
+            escape_xml(&isbn),
+        ));
+    }
+
+    let rss = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+         <rss version=\"2.0\"><channel>\
+         <title>{}</title><link>{}</link>\
+         <description>Anonymous book recommendations</description>\
+         {items}</channel></rss>",
+        escape_xml(&page_title),
+        escape_xml(&page_url),
+    );
+    Ok(([(header::CONTENT_TYPE, "application/rss+xml; charset=utf-8")], rss))
+}
+
 /// Permanently delete the page and everything attached to it (owner only).
 /// Recommendations and votes go with it via ON DELETE CASCADE.
 pub async fn delete_page(

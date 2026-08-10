@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anonbookrec::app::build_app;
 use anonbookrec::config::Config;
-use anonbookrec::resolver::OpenLibraryResolver;
+use anonbookrec::resolver::{CachingResolver, OpenLibraryResolver};
 use anonbookrec::state::AppState;
 use anonbookrec::db;
 
@@ -13,9 +13,11 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     let pool = db::init_pool(&config.database_url).await?;
 
+    let resolver =
+        CachingResolver::new(Arc::new(OpenLibraryResolver::new()), pool.clone());
     let state = AppState {
         pool,
-        resolver: Arc::new(OpenLibraryResolver::new()),
+        resolver: Arc::new(resolver),
         config: Arc::new(config.clone()),
     };
     let app = build_app(state);

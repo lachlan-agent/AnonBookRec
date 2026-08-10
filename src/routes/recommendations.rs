@@ -223,6 +223,22 @@ async fn submit(
         _ => None,
     };
 
+    // Owner-banned books are rejected outright.
+    if let Some(target_user) = &target {
+        let banned: Option<(i64,)> = sqlx::query_as(
+            "SELECT 1 FROM user_book_blacklist WHERE user_id = ? AND isbn = ?",
+        )
+        .bind(target_user.id)
+        .bind(&resolved.isbn13)
+        .fetch_optional(&state.pool)
+        .await?;
+        if banned.is_some() {
+            return Err(AppError::BadRequest(
+                "the page owner doesn't accept this book".into(),
+            ));
+        }
+    }
+
     let (submitter, jar) = auth::submitter_hash(jar, state.config.secure_cookies);
     let user_id = target.as_ref().map(|u| u.id);
     let blind = crypto::blind_index(&state.config.pepper, user_id, &resolved.isbn13);
@@ -491,6 +507,49 @@ pub async fn patch_rec(
     }
 
     Ok(Json(json!({ "ok": true })))
+}
+
+/// Ban the book: remove the recommendation and reject future submissions of
+/// its ISBN to this page. For sealed rows the ISBN is recovered with the
+/// owner's key.
+pub async fn ban_rec(
+    State(state): State<AppState>,
+    Path(rec_id): Path<i64>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let (row, user, secret) = owned_rec(&state, rec_id, &headers).await?;
+
+    let (isbn, title) = match (&row.isbn, &row.book_name) {
+        (Some(isbn), name) => (isbn.clone(), name.clone()),
+        _ => {
+            let private_key = crypto::unwrap_private_key(&secret, &user.enc_private_key)
+                .ok_or_else(|| anyhow::anyhow!("stored private key failed to unwrap"))?;
+            let payload = row.enc_payload.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("private recommendation is missing its sealed payload")
+            })?;
+            let opened = crypto::unseal(&private_key, payload)
+                .ok_or_else(|| anyhow::anyhow!("sealed payload failed to open"))?;
+            let sealed: SealedBook = serde_json::from_slice(&opened)
+                .map_err(|e| anyhow::anyhow!("sealed payload is corrupt: {e}"))?;
+            (sealed.isbn, Some(sealed.book_name))
+        }
+    };
+
+    let mut tx = state.pool.begin().await?;
+    sqlx::query(
+        "INSERT OR IGNORE INTO user_book_blacklist (user_id, isbn, title) VALUES (?, ?, ?)",
+    )
+    .bind(user.id)
+    .bind(&isbn)
+    .bind(&title)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("DELETE FROM recommendations WHERE id = ?")
+        .bind(rec_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "ok": true, "isbn": isbn, "title": title })))
 }
 
 pub async fn delete_rec(

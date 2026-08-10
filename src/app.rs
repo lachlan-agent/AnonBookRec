@@ -50,6 +50,8 @@ fn personalize_meta(html: &str, display_name: Option<&str>, url: &str) -> String
 pub fn build_app(state: AppState) -> Router {
     let mut read_api = Router::new()
         .route("/api/pages/{slug}", get(users::get_page))
+        .route("/api/pages/{slug}/bans", get(users::list_bans))
+        .route("/u/{slug}/feed.xml", get(users::feed))
         .route("/api/pages/{slug}/qr.svg", get(users::qr_svg))
         .route("/api/search", get(recommendations::search));
 
@@ -70,7 +72,9 @@ pub fn build_app(state: AppState) -> Router {
         .route(
             "/api/recommendations/{id}",
             patch(recommendations::patch_rec).delete(recommendations::delete_rec),
-        );
+        )
+        .route("/api/recommendations/{id}/ban", post(recommendations::ban_rec))
+        .route("/api/pages/{slug}/bans/{isbn}", axum::routing::delete(users::unban));
 
     // Password guessing gets its own, much stricter per-IP budget on top of
     // Argon2id's inherent slowness.

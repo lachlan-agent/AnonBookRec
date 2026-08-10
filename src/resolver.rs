@@ -98,6 +98,70 @@ impl SearchDoc {
     }
 }
 
+/// Caches resolved books in SQLite so repeat submissions of known ISBNs never
+/// touch Open Library, and title hits warm the ISBN cache. Search (typeahead)
+/// is deliberately uncached — variety matters there.
+pub struct CachingResolver {
+    inner: std::sync::Arc<dyn BookResolver>,
+    pool: sqlx::SqlitePool,
+}
+
+impl CachingResolver {
+    pub fn new(inner: std::sync::Arc<dyn BookResolver>, pool: sqlx::SqlitePool) -> Self {
+        Self { inner, pool }
+    }
+
+    async fn cache_get(&self, isbn13: &str) -> Option<ResolvedBook> {
+        sqlx::query_as::<_, (String, Option<String>)>(
+            "SELECT title, author FROM book_cache WHERE isbn = ?",
+        )
+        .bind(isbn13)
+        .fetch_optional(&self.pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|(title, author)| ResolvedBook { title, isbn13: isbn13.to_string(), author })
+    }
+
+    async fn cache_put(&self, book: &ResolvedBook) {
+        let _ = sqlx::query(
+            "INSERT INTO book_cache (isbn, title, author) VALUES (?, ?, ?)
+             ON CONFLICT(isbn) DO UPDATE SET title = excluded.title, author = excluded.author",
+        )
+        .bind(&book.isbn13)
+        .bind(&book.title)
+        .bind(&book.author)
+        .execute(&self.pool)
+        .await;
+    }
+}
+
+#[async_trait::async_trait]
+impl BookResolver for CachingResolver {
+    async fn by_isbn(&self, isbn13: &str) -> Result<Option<ResolvedBook>, ResolverError> {
+        if let Some(hit) = self.cache_get(isbn13).await {
+            return Ok(Some(hit));
+        }
+        let resolved = self.inner.by_isbn(isbn13).await?;
+        if let Some(book) = &resolved {
+            self.cache_put(book).await;
+        }
+        Ok(resolved)
+    }
+
+    async fn by_title(&self, title: &str) -> Result<Option<ResolvedBook>, ResolverError> {
+        let resolved = self.inner.by_title(title).await?;
+        if let Some(book) = &resolved {
+            self.cache_put(book).await;
+        }
+        Ok(resolved)
+    }
+
+    async fn search(&self, query: &str) -> Result<Vec<BookSuggestion>, ResolverError> {
+        self.inner.search(query).await
+    }
+}
+
 #[async_trait::async_trait]
 impl BookResolver for OpenLibraryResolver {
     async fn by_isbn(&self, isbn13: &str) -> Result<Option<ResolvedBook>, ResolverError> {
