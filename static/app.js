@@ -696,6 +696,18 @@ function pageSlug() {
 /* Latest page state, for handlers that need more than the slug. */
 let currentPage = null;
 
+/* Apply a style bundle (theme, font, corners, density, accent) to the page.
+   Used both for saved state and for live preview while the Theme tab is
+   being fiddled with. */
+function applyStyle(style) {
+  document.body.dataset.theme = style.theme || "cloth";
+  applyCanvasTheme(style.theme);
+  document.body.dataset.font = style.font || "";
+  document.body.dataset.radius = style.radius || "";
+  document.body.dataset.density = style.density || "";
+  applyAccent(style.accent);
+}
+
 /* Custom accent: sets --cloth and derives --cloth-dark (hover fill + accent
    text) by darkening on light themes and lightening on dark ones. */
 function applyAccent(hex) {
@@ -742,12 +754,7 @@ async function loadUserPage(slug) {
 
   currentPage = page;
   $("unlock-panel").hidden = page.owner || Boolean(secret);
-  document.body.dataset.theme = page.theme || "cloth";
-  applyCanvasTheme(page.theme);
-  document.body.dataset.font = page.font || "";
-  document.body.dataset.radius = page.radius || "";
-  document.body.dataset.density = page.density || "";
-  applyAccent(page.accent);
+  applyStyle(page);
   $("page-bio").hidden = !page.bio;
   $("page-bio").textContent = page.bio || "";
   $("page-fav").hidden = !page.favourite_book;
@@ -855,6 +862,26 @@ function initUser() {
   };
   $("tab-btn-general").addEventListener("click", () => showTab("general"));
   $("tab-btn-theme").addEventListener("click", () => showTab("theme"));
+
+  // Live preview: every Theme-tab change restyles the page immediately;
+  // nothing persists until Save. Closing the dialog reverts to saved state.
+  const previewStyle = () => applyStyle({
+    theme: $("theme").value,
+    font: $("font").value,
+    radius: $("radius").value,
+    density: $("density").value,
+    accent: $("accent-on").checked ? $("accent-color").value : null,
+  });
+  for (const id of ["theme", "font", "radius", "density", "accent-on"]) {
+    $(id).addEventListener("change", previewStyle);
+  }
+  $("accent-color").addEventListener("input", () => {
+    $("accent-on").checked = true;
+    previewStyle();
+  });
+  $("settings-dialog").addEventListener("close", () => {
+    if (currentPage) applyStyle(currentPage);
+  });
   $("close-settings").addEventListener("click", () => {
     $("settings-dialog").close();
   });
@@ -1191,9 +1218,11 @@ function initUser() {
           favourite_book: $("favourite-book").value,
         }),
       });
+      // Refresh currentPage BEFORE closing: the dialog's close handler
+      // reverts styling to currentPage, which must be the just-saved state.
+      await loadUserPage(slug);
       $("settings-dialog").close();
       setStatus("Settings saved.");
-      await loadUserPage(slug);
     } catch (err) { showError(err); }
   });
 }
