@@ -26,6 +26,10 @@ pub struct User {
     pub enc_secret: Option<Vec<u8>>,
     pub is_hidden: bool,
     pub share_token: Option<String>,
+    pub font: Option<String>,
+    pub accent: Option<String>,
+    pub radius: Option<String>,
+    pub density: Option<String>,
 }
 
 impl User {
@@ -41,16 +45,19 @@ impl User {
     }
 }
 
-const USER_COLUMNS: &str = "id, slug, secret_hash, public_key, enc_private_key, default_public, \
-                            display_name, bio, favourite_book, theme, username, password_hash, \
-                            enc_secret, is_hidden, share_token";
+const USER_COLUMNS: &str = "u.id, u.slug, u.secret_hash, u.public_key, u.enc_private_key, \
+                            u.default_public, u.display_name, u.bio, u.favourite_book, \
+                            u.username, u.password_hash, u.enc_secret, u.is_hidden, \
+                            u.share_token, t.theme, t.font, t.accent, t.radius, t.density";
+
+const USER_FROM: &str = "users u LEFT JOIN user_theme t ON t.user_id = u.id";
 
 /// Look a page up by its handle: random slug or chosen username. Old slug
 /// URLs keep working after a username is set.
 pub async fn user_by_slug(pool: &SqlitePool, slug: &str) -> Result<Option<User>, AppError> {
     // Slugs and share tokens are case-sensitive base58; usernames lowercase.
     let user = sqlx::query_as::<_, User>(sqlx::AssertSqlSafe(format!(
-        "SELECT {USER_COLUMNS} FROM users WHERE slug = ?1 OR username = ?2 OR share_token = ?1"
+        "SELECT {USER_COLUMNS} FROM {USER_FROM} WHERE u.slug = ?1 OR u.username = ?2 OR u.share_token = ?1"
     )))
     .bind(slug)
     .bind(slug.to_lowercase())
@@ -61,7 +68,7 @@ pub async fn user_by_slug(pool: &SqlitePool, slug: &str) -> Result<Option<User>,
 
 pub async fn user_by_id(pool: &SqlitePool, id: i64) -> Result<Option<User>, AppError> {
     let user = sqlx::query_as::<_, User>(sqlx::AssertSqlSafe(format!(
-        "SELECT {USER_COLUMNS} FROM users WHERE id = ?"
+        "SELECT {USER_COLUMNS} FROM {USER_FROM} WHERE u.id = ?"
     )))
     .bind(id)
     .fetch_optional(pool)

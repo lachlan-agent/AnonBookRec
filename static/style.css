@@ -2,6 +2,8 @@
    System stacks only: the CSP forbids external fonts. */
 
 :root {
+  --radius-s: 3px;
+  --radius-m: 4px;
   --paper: #f5f4ef;
   --card: #fbfaf6;
   --field: #ffffff;
@@ -379,6 +381,50 @@ body[data-theme="flock-glass"] .key-dialog {
 }
 body[data-theme="flock-glass"] .key-dialog::backdrop { background: rgba(60, 56, 46, 0.25); }
 
+/* Structured style options (validated server-side, applied as data attrs) */
+body[data-radius="square"] { --radius-s: 0; --radius-m: 0; }
+body[data-radius="pill"] { --radius-s: 10px; --radius-m: 16px; }
+
+body[data-font="modern"] { --serif: var(--sans); }
+body[data-font="typewriter"] {
+  --serif: ui-monospace, "Courier New", Courier, monospace;
+}
+body[data-font="elegant"] {
+  --serif: Didot, "Bodoni MT", "Bodoni 72", "Hoefler Text", Garamond, Georgia, serif;
+}
+body[data-font="humanist"] {
+  --serif: Seravek, "Gill Sans", "Trebuchet MS", Verdana, sans-serif;
+  --sans: Seravek, "Gill Sans", "Trebuchet MS", Verdana, sans-serif;
+}
+
+body[data-density="compact"] .hero.compact { padding: 1.3rem 0 0.8rem; }
+body[data-density="compact"] .shelf { padding: 0.9rem 1rem 1.1rem; margin-bottom: 1.6rem; }
+body[data-density="compact"] .card-list li { padding: 0.35rem 0.1rem; }
+body[data-density="compact"] .hero h1 { font-size: clamp(1.5rem, 4.5vw, 2.1rem); }
+body[data-density="compact"] .page-bio { margin-bottom: 0.6rem; }
+
+/* Settings tabs */
+.tab-row { display: flex; gap: 0.3rem; margin-bottom: 0.9rem; border-bottom: 1px solid var(--rule); }
+.tab-button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.35rem 0.7rem;
+  font: 600 0.85rem var(--sans);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.tab-button.active { color: var(--cloth-dark); border-bottom-color: var(--cloth); }
+.accent-row { display: flex; align-items: center; gap: 0.6rem; }
+.accent-row input[type="color"] {
+  width: 3rem;
+  height: 2rem;
+  padding: 0.1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-s);
+  background: var(--field);
+}
+
 #theme-canvas {
   position: fixed;
   inset: 0;
@@ -409,7 +455,7 @@ input[type="checkbox"] {
   width: 18px;
   height: 18px;
   border: 2px solid currentColor;
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   transform: translateY(-1px);
   display: grid;
   place-content: center;
@@ -477,7 +523,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
 .button {
   font: 600 0.95rem var(--sans);
   border: 1px solid var(--cloth-dark);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   padding: 0.6rem 1.2rem;
   cursor: pointer;
   background: var(--card);
@@ -497,7 +543,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
 .shelf {
   background: var(--card);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: var(--radius-m);
   padding: 1.5rem 1.5rem 1.75rem;
   margin-bottom: 3rem;
   box-shadow: 0 1px 0 var(--rule);
@@ -532,7 +578,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   font: 1rem var(--serif);
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   background: var(--field);
   color: var(--ink);
 }
@@ -551,7 +597,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   list-style: none;
   background: var(--field);
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   box-shadow: 0 4px 14px rgba(34, 38, 43, 0.12);
   max-height: 19rem;
   overflow-y: auto;
@@ -590,7 +636,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   gap: 0.9rem;
   align-items: center;
   border: 1px solid var(--cloth);
-  border-radius: 4px;
+  border-radius: var(--radius-m);
   background: color-mix(in srgb, var(--cloth) 6%, transparent);
   padding: 0.8rem 1rem;
   margin-top: 0.8rem;
@@ -667,7 +713,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   font: 0.85rem var(--sans);
   padding: 0.4rem 0.55rem;
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   background: var(--field);
   color: var(--ink);
   resize: vertical;
@@ -688,7 +734,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
 .unlock-panel summary:hover { color: var(--cloth-dark); }
 .unlock-panel[open] {
   border: 1px dashed var(--rule);
-  border-radius: 4px;
+  border-radius: var(--radius-m);
   padding: 0.7rem 1rem;
 }
 .unlock-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
@@ -698,7 +744,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   font: 0.85rem var(--mono);
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   background: var(--field);
   color: var(--ink);
 }
@@ -715,14 +761,14 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   font: 0.9rem var(--sans);
   padding: 0.35rem 0.6rem;
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   background: var(--field);
   color: var(--ink);
   resize: vertical;
 }
 .settings-profile {
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   padding: 0.2rem 0.8rem 0.6rem;
   margin: 0.8rem 0;
 }
@@ -746,7 +792,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   margin-top: 0.5rem;
   color: var(--ink-soft);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-m);
   line-height: 0;
 }
 .icon-button:hover { color: var(--cloth-dark); background: color-mix(in srgb, var(--cloth) 10%, transparent); }
@@ -777,7 +823,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   max-width: 100%;
   height: auto;
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: var(--radius-m);
   background: #fff;
   padding: 0.4rem;
 }
@@ -804,7 +850,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   margin: 0 0 0.6rem;
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   background: var(--card);
   box-shadow: 0 1px 0 var(--rule);
 }
@@ -828,7 +874,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   max-height: min(85vh, 100%);
   overflow-y: auto;
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: var(--radius-m);
   background: var(--card);
   color: var(--ink);
   padding: 1.75rem;
@@ -842,7 +888,7 @@ main { width: min(42rem, 100% - 2.5rem); margin: 0 auto; flex: 1; }
   font: 0.8rem var(--mono);
   background: var(--field);
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   padding: 0.45rem 0.6rem;
   overflow-wrap: anywhere;
 }

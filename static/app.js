@@ -696,6 +696,25 @@ function pageSlug() {
 /* Latest page state, for handlers that need more than the slug. */
 let currentPage = null;
 
+/* Custom accent: sets --cloth and derives --cloth-dark (hover fill + accent
+   text) by darkening on light themes and lightening on dark ones. */
+function applyAccent(hex) {
+  const root = document.body.style;
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) {
+    root.removeProperty("--cloth");
+    root.removeProperty("--cloth-dark");
+    return;
+  }
+  const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const bg = getComputedStyle(document.body).backgroundColor.match(/\d+/g) || [245, 245, 240];
+  const bgLum = (0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]) / 255;
+  const shade = (c, f) => Math.round(Math.min(255, Math.max(0, c * f + (f > 1 ? 20 : 0))));
+  const factor = bgLum > 0.5 ? 0.72 : 1.45;
+  const dark = rgb.map((c) => shade(c, factor));
+  root.setProperty("--cloth", hex);
+  root.setProperty("--cloth-dark", `rgb(${dark.join(",")})`);
+}
+
 async function refreshQr(slug, secret, page) {
   try {
     const response = await fetch(`/api/pages/${encodeURIComponent(slug)}/qr.svg`, {
@@ -725,6 +744,10 @@ async function loadUserPage(slug) {
   $("unlock-panel").hidden = page.owner || Boolean(secret);
   document.body.dataset.theme = page.theme || "cloth";
   applyCanvasTheme(page.theme);
+  document.body.dataset.font = page.font || "";
+  document.body.dataset.radius = page.radius || "";
+  document.body.dataset.density = page.density || "";
+  applyAccent(page.accent);
   $("page-bio").hidden = !page.bio;
   $("page-bio").textContent = page.bio || "";
   $("page-fav").hidden = !page.favourite_book;
@@ -745,9 +768,15 @@ async function loadUserPage(slug) {
     const fields = {
       "display-name": page.display_name,
       "theme": page.theme || "cloth",
+      "font": page.font || "",
+      "radius": page.radius || "",
+      "density": page.density || "",
       "bio": page.bio,
       "favourite-book": page.favourite_book,
     };
+    $("theme-fields").disabled = !page.default_public;
+    $("accent-on").checked = Boolean(page.accent);
+    if (page.accent) $("accent-color").value = page.accent;
     for (const [id, value] of Object.entries(fields)) {
       if (document.activeElement !== $(id)) $(id).value = value || "";
     }
@@ -817,6 +846,15 @@ function initUser() {
   $("open-settings").addEventListener("click", () => {
     $("settings-dialog").showModal();
   });
+
+  const showTab = (name) => {
+    $("tab-general").hidden = name !== "general";
+    $("tab-theme").hidden = name !== "theme";
+    $("tab-btn-general").classList.toggle("active", name === "general");
+    $("tab-btn-theme").classList.toggle("active", name === "theme");
+  };
+  $("tab-btn-general").addEventListener("click", () => showTab("general"));
+  $("tab-btn-theme").addEventListener("click", () => showTab("theme"));
   $("close-settings").addEventListener("click", () => {
     $("settings-dialog").close();
   });
@@ -1145,6 +1183,10 @@ function initUser() {
           is_hidden: $("hide-page").checked,
           display_name: $("display-name").value,
           theme: $("theme").value,
+          font: $("font").value,
+          radius: $("radius").value,
+          density: $("density").value,
+          accent: $("accent-on").checked ? $("accent-color").value : "",
           bio: $("bio").value,
           favourite_book: $("favourite-book").value,
         }),

@@ -609,8 +609,24 @@ async fn profile_only_shown_for_public_pages() {
         Some(json!({"theme": "neon"})), Some(&secret), None).await;
     assert_eq!(bad_theme.status, StatusCode::BAD_REQUEST);
 
+    // Style options round-trip and validate.
+    let styled = call(&app, "PATCH", &page_url,
+        Some(json!({"font": "typewriter", "radius": "pill", "density": "compact",
+                    "accent": "#A1B2C3"})),
+        Some(&secret), None).await;
+    assert_eq!(styled.status, StatusCode::OK);
+    let bad_font = call(&app, "PATCH", &page_url,
+        Some(json!({"font": "comic-sans"})), Some(&secret), None).await;
+    assert_eq!(bad_font.status, StatusCode::BAD_REQUEST);
+    let bad_accent = call(&app, "PATCH", &page_url,
+        Some(json!({"accent": "red"})), Some(&secret), None).await;
+    assert_eq!(bad_accent.status, StatusCode::BAD_REQUEST);
+
     // Public page: visitors see the profile.
     let visitor = call(&app, "GET", &page_url, None, None, None).await;
+    assert_eq!(visitor.body["font"], json!("typewriter"));
+    assert_eq!(visitor.body["accent"], json!("#a1b2c3"));
+    assert_eq!(visitor.body["radius"], json!("pill"));
     assert_eq!(visitor.body["bio"], json!("I read at night"));
     assert_eq!(visitor.body["favourite_book"], json!("The Dispossessed"));
     assert_eq!(visitor.body["theme"], json!("plum"));

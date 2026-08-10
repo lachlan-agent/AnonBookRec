@@ -83,6 +83,10 @@ pub struct PageView {
     pub bio: Option<String>,
     pub favourite_book: Option<String>,
     pub theme: Option<String>,
+    pub font: Option<String>,
+    pub accent: Option<String>,
+    pub radius: Option<String>,
+    pub density: Option<String>,
     pub recommendations: Vec<RecommendationView>,
 }
 
@@ -125,6 +129,10 @@ pub async fn get_page(
         bio: show_profile.then_some(user.bio).flatten(),
         favourite_book: show_profile.then_some(user.favourite_book).flatten(),
         theme: show_profile.then_some(user.theme).flatten(),
+        font: show_profile.then_some(user.font).flatten(),
+        accent: show_profile.then_some(user.accent).flatten(),
+        radius: show_profile.then_some(user.radius).flatten(),
+        density: show_profile.then_some(user.density).flatten(),
         recommendations,
     }))
 }
@@ -145,6 +153,10 @@ pub struct PagePatch {
     pub bio: Option<String>,
     pub favourite_book: Option<String>,
     pub theme: Option<String>,
+    pub font: Option<String>,
+    pub accent: Option<String>,
+    pub radius: Option<String>,
+    pub density: Option<String>,
 }
 
 /// Trim an optional text field; empty clears the column (`Some(None)`),
@@ -189,18 +201,10 @@ pub async fn patch_page(
             .await?;
     }
 
-    let theme = clean_text(body.theme, 16, "theme")?;
-    if let Some(Some(theme)) = &theme
-        && !THEMES.contains(&theme.as_str())
-    {
-        return Err(AppError::BadRequest(format!("unknown theme (try {})", THEMES.join(", "))));
-    }
-
     let updates = [
         ("display_name", clean_text(body.display_name, 64, "display name")?),
         ("bio", clean_text(body.bio, 500, "bio")?),
         ("favourite_book", clean_text(body.favourite_book, 256, "favourite book")?),
-        ("theme", theme),
     ];
     for (column, value) in updates {
         if let Some(value) = value {
@@ -214,7 +218,62 @@ pub async fn patch_page(
         }
     }
 
+    // Presentation options live in user_theme (upserted); each is a
+    // whitelisted enum or a strict hex colour — raw CSS never enters.
+    let theme_updates = [
+        ("theme", clean_enum(body.theme, THEMES, "theme")?),
+        ("font", clean_enum(body.font, FONTS, "font")?),
+        ("radius", clean_enum(body.radius, RADII, "corner style")?),
+        ("density", clean_enum(body.density, DENSITIES, "density")?),
+        ("accent", clean_accent(body.accent)?),
+    ];
+    for (column, value) in theme_updates {
+        if let Some(value) = value {
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "INSERT INTO user_theme (user_id, {column}) VALUES (?1, ?2)
+                 ON CONFLICT(user_id) DO UPDATE SET {column} = excluded.{column}"
+            )))
+            .bind(user.id)
+            .bind(value)
+            .execute(&state.pool)
+            .await?;
+        }
+    }
+
     Ok(Json(json!({ "ok": true })))
+}
+
+pub const FONTS: &[&str] = &["classic", "modern", "typewriter", "elegant", "humanist"];
+pub const RADII: &[&str] = &["rounded", "square", "pill"];
+pub const DENSITIES: &[&str] = &["cozy", "compact"];
+
+/// Whitelist-validated optional enum; empty clears.
+fn clean_enum(
+    field: Option<String>,
+    allowed: &[&str],
+    label: &str,
+) -> Result<Option<Option<String>>, AppError> {
+    let Some(cleaned) = clean_text(field, 24, label)? else { return Ok(None) };
+    if let Some(value) = &cleaned
+        && !allowed.contains(&value.as_str())
+    {
+        return Err(AppError::BadRequest(format!("unknown {label} (try {})", allowed.join(", "))));
+    }
+    Ok(Some(cleaned))
+}
+
+/// Accent colour: exactly `#rrggbb`, stored lowercase; empty clears.
+fn clean_accent(field: Option<String>) -> Result<Option<Option<String>>, AppError> {
+    let Some(cleaned) = clean_text(field, 7, "accent colour")? else { return Ok(None) };
+    let Some(value) = cleaned else { return Ok(Some(None)) };
+    let value = value.to_lowercase();
+    let valid = value.len() == 7
+        && value.starts_with('#')
+        && value[1..].chars().all(|c| c.is_ascii_hexdigit());
+    if !valid {
+        return Err(AppError::BadRequest("accent colour must be #rrggbb".into()));
+    }
+    Ok(Some(Some(value)))
 }
 
 #[derive(Serialize)]
@@ -421,10 +480,11 @@ pub async fn login(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let username = body.username.trim().to_lowercase();
     let user = sqlx::query_as::<_, auth::User>(sqlx::AssertSqlSafe(
-        "SELECT id, slug, secret_hash, public_key, enc_private_key, default_public, \
-         display_name, bio, favourite_book, theme, username, password_hash, enc_secret, \
-         is_hidden, share_token \
-         FROM users WHERE username = ?"
+        "SELECT u.id, u.slug, u.secret_hash, u.public_key, u.enc_private_key, \
+         u.default_public, u.display_name, u.bio, u.favourite_book, u.username, \
+         u.password_hash, u.enc_secret, u.is_hidden, u.share_token, \
+         t.theme, t.font, t.accent, t.radius, t.density \
+         FROM users u LEFT JOIN user_theme t ON t.user_id = u.id WHERE u.username = ?"
             .to_string(),
     ))
     .bind(&username)

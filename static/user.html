@@ -47,6 +47,11 @@
              aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
+    <div class="tab-row" role="tablist">
+      <button id="tab-btn-general" class="tab-button active" type="button">General</button>
+      <button id="tab-btn-theme" class="tab-button" type="button">Theme</button>
+    </div>
+    <div id="tab-general">
     <div class="share-row">
       <button id="copy-share" class="button small" type="button">Copy share link</button>
       <button id="copy-qr" class="button small" type="button">Copy QR code</button>
@@ -92,37 +97,6 @@
     <fieldset id="profile-fields" class="settings-profile">
       <legend>Public profile</legend>
       <div class="settings-field">
-        <label for="theme">Page colour</label>
-        <select id="theme">
-          <option value="cloth">Bookcloth green</option>
-          <option value="ink">Blue thing?</option>
-          <option value="plum">Plum but not actually plum</option>
-          <option value="amber">Amber</option>
-          <option value="night">Night (dark)</option>
-          <option value="midnight">Midnight blue (dark)</option>
-          <option value="noir">Noir (dark)</option>
-          <option value="garnet">Another (dark)</option>
-          <option value="forest">Forest (animated)</option>
-          <option value="cosmos">Cosmos (animated)</option>
-          <option value="prism">Prism (animated)</option>
-          <option value="manuscript">Manuscript</option>
-          <option value="blueprint">Blueprint (dark)</option>
-          <option value="ocean">Ocean (animated)</option>
-          <option value="ember">Ember (animated)</option>
-          <option value="sakura">Sakura (animated)</option>
-          <option value="aurora">Aurora (animated)</option>
-          <option value="rain">Rain (animated)</option>
-          <option value="fireflies">Fireflies (animated)</option>
-          <option value="snow">Snowfall (animated)</option>
-          <option value="constellation">Constellation (animated)</option>
-          <option value="matrix">Matrix (animated)</option>
-          <option value="koi">Koi pond (animated)</option>
-          <option value="lava">Lava lamp (animated)</option>
-          <option value="flock">Paper birds (animated)</option>
-          <option value="flock-glass">Paper birds — glass (animated)</option>
-        </select>
-      </div>
-      <div class="settings-field">
         <label for="bio">Bio</label>
         <textarea id="bio" maxlength="500" rows="3"
                   placeholder="Whatever you want really."></textarea>
@@ -158,6 +132,76 @@
       </div>
       <p id="account-status" class="status" role="status"></p>
     </fieldset>
+    </div>
+    <div id="tab-theme" hidden>
+      <fieldset id="theme-fields" class="settings-profile">
+        <legend>Appearance</legend>
+        <div class="settings-field">
+          <label for="theme">Page colour</label>
+          <select id="theme">
+          <option value="cloth">Bookcloth green</option>
+          <option value="ink">Blue thing?</option>
+          <option value="plum">Plum but not actually plum</option>
+          <option value="amber">Amber</option>
+          <option value="night">Night (dark)</option>
+          <option value="midnight">Midnight blue (dark)</option>
+          <option value="noir">Noir (dark)</option>
+          <option value="garnet">Another (dark)</option>
+          <option value="forest">Forest (animated)</option>
+          <option value="cosmos">Cosmos (animated)</option>
+          <option value="prism">Prism (animated)</option>
+          <option value="manuscript">Manuscript</option>
+          <option value="blueprint">Blueprint (dark)</option>
+          <option value="ocean">Ocean (animated)</option>
+          <option value="ember">Ember (animated)</option>
+          <option value="sakura">Sakura (animated)</option>
+          <option value="aurora">Aurora (animated)</option>
+          <option value="rain">Rain (animated)</option>
+          <option value="fireflies">Fireflies (animated)</option>
+          <option value="snow">Snowfall (animated)</option>
+          <option value="constellation">Constellation (animated)</option>
+          <option value="matrix">Matrix (animated)</option>
+          <option value="koi">Koi pond (animated)</option>
+          <option value="lava">Lava lamp (animated)</option>
+          <option value="flock">Paper birds (animated)</option>
+          <option value="flock-glass">Paper birds — glass (animated)</option>
+        </select>
+        </div>
+        <div class="settings-field">
+          <label for="font">Typeface</label>
+          <select id="font">
+            <option value="">Theme default</option>
+            <option value="classic">Classic (serif titles)</option>
+            <option value="modern">Modern (all sans)</option>
+            <option value="typewriter">Typewriter</option>
+            <option value="elegant">Elegant (Didot/Bodoni)</option>
+            <option value="humanist">Humanist</option>
+          </select>
+        </div>
+        <div class="settings-field">
+          <label for="radius">Corners</label>
+          <select id="radius">
+            <option value="">Rounded (default)</option>
+            <option value="square">Square</option>
+            <option value="pill">Pill</option>
+          </select>
+        </div>
+        <div class="settings-field">
+          <label for="density">Density</label>
+          <select id="density">
+            <option value="">Cozy (default)</option>
+            <option value="compact">Compact</option>
+          </select>
+        </div>
+        <div class="settings-field">
+          <label for="accent-color">Accent colour</label>
+          <div class="accent-row">
+            <label class="owner-toggle"><input id="accent-on" type="checkbox"> Custom</label>
+            <input id="accent-color" type="color" value="#2e5e4e">
+          </div>
+        </div>
+      </fieldset>
+    </div>
     <div class="dialog-actions">
       <button id="save-settings" class="button primary small" type="button">Save settings</button>
       <button id="logout" class="button small danger" type="button">Sign out</button>
