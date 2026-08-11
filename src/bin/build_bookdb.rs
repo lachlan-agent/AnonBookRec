@@ -4,15 +4,22 @@
 //!
 //! ```sh
 //! cargo run --release --bin build_bookdb -- \
-//!     dumps/authors.txt.gz dumps/editions.txt.gz books.sqlite [--covers-only]
+//!     dumps/authors.txt.gz dumps/editions.txt.gz books.sqlite \
+//!     [--covers-only] [--pop dumps/ratings.txt.gz --pop dumps/readinglog.txt.gz]
 //! ```
 //!
-//! Dumps: <https://openlibrary.org/developers/dumps>. Each line is five
-//! tab-separated columns: type, key, revision, last_modified, JSON.
+//! Dumps: <https://openlibrary.org/developers/dumps>. Author/edition lines are
+//! five tab-separated columns: type, key, revision, last_modified, JSON. The
+//! ratings and reading-log dumps start with the work key.
 //!
 //! `--covers-only` keeps only editions that have a cover image — a quality
 //! filter that shrinks the database several-fold for small hosts; books people
 //! actually recommend almost always have covers.
+//!
+//! `--pop` files feed a per-work popularity count (one point per rating or
+//! reading-log entry). Rows are written in popularity order so the resolver
+//! can rank typeahead matches by plain rowid: famous books come first without
+//! any sorting at query time.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
@@ -39,12 +46,22 @@ struct EditionRecord {
     #[serde(default)]
     authors: Vec<KeyRef>,
     #[serde(default)]
+    works: Vec<KeyRef>,
+    #[serde(default)]
     covers: Vec<Option<i64>>,
 }
 
 #[derive(Deserialize)]
 struct KeyRef {
     key: Option<String>,
+}
+
+struct Row {
+    pop: u32,
+    isbn13: String,
+    title: String,
+    author: Option<String>,
+    cover: Option<i64>,
 }
 
 fn open_dump(path: &str) -> anyhow::Result<impl BufRead> {
@@ -76,54 +93,51 @@ fn load_authors(path: &str) -> anyhow::Result<HashMap<Box<str>, Box<str>>> {
     Ok(authors)
 }
 
+/// One popularity point per rating / reading-log line, keyed by work.
+fn load_popularity(paths: &[String]) -> anyhow::Result<HashMap<Box<str>, u32>> {
+    let mut pop: HashMap<Box<str>, u32> = HashMap::new();
+    for path in paths {
+        for line in open_dump(path)?.lines() {
+            let line = line?;
+            let Some(work) = line.split('\t').next() else { continue };
+            let Some(key) = work.strip_prefix("/works/") else { continue };
+            *pop.entry(key.into()).or_insert(0) += 1;
+        }
+    }
+    eprintln!("popularity: {} works", pop.len());
+    Ok(pop)
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let [_, authors_path, editions_path, out_path, rest @ ..] = args.as_slice() else {
-        anyhow::bail!("usage: build_bookdb <authors.txt.gz> <editions.txt.gz> <out.sqlite> [--covers-only]");
+        anyhow::bail!(
+            "usage: build_bookdb <authors.txt.gz> <editions.txt.gz> <out.sqlite> \
+             [--covers-only] [--pop <ratings.txt.gz>]..."
+        );
     };
     let covers_only = rest.iter().any(|a| a == "--covers-only");
+    let pop_paths: Vec<String> = rest
+        .windows(2)
+        .filter(|w| w[0] == "--pop")
+        .map(|w| w[1].clone())
+        .collect();
 
     if std::path::Path::new(out_path).exists() {
         anyhow::bail!("{out_path} already exists; remove it first");
     }
 
     let authors = load_authors(authors_path)?;
-
-    let options = SqliteConnectOptions::new()
-        .filename(out_path)
-        .create_if_missing(true)
-        .journal_mode(SqliteJournalMode::Off)
-        .synchronous(SqliteSynchronous::Off);
-    let mut conn = SqliteConnection::connect_with(&options).await?;
-
-    sqlx::raw_sql(
-        "CREATE TABLE books (
-             id      INTEGER PRIMARY KEY,
-             isbn13  TEXT NOT NULL,
-             title   TEXT NOT NULL,
-             author  TEXT,
-             cover   INTEGER
-         );
-         CREATE VIRTUAL TABLE books_fts USING fts5(
-             title, author,
-             content = '',
-             tokenize = 'unicode61 remove_diacritics 2',
-             prefix = '2 3'
-         );",
-    )
-    .execute(&mut conn)
-    .await?;
+    let popularity = load_popularity(&pop_paths)?;
 
     let mut lines = 0u64;
-    let mut kept = 0u64;
-    let mut next_id: i64 = 1;
-    let mut tx = conn.begin().await?;
+    let mut rows: Vec<Row> = Vec::new();
     for line in open_dump(editions_path)?.lines() {
         let line = line?;
         lines += 1;
         if lines.is_multiple_of(5_000_000) {
-            eprintln!("editions: {lines} scanned, {kept} kept");
+            eprintln!("editions: {lines} scanned, {} kept", rows.len());
         }
         let Some(json) = json_column(&line) else { continue };
         let Ok(record) = serde_json::from_str::<EditionRecord>(json) else { continue };
@@ -152,24 +166,71 @@ async fn main() -> anyhow::Result<()> {
             .map(|k| k.trim_start_matches("/authors/"))
             .find_map(|k| authors.get(k))
             .map(|name| name.to_string());
+        let pop = record
+            .works
+            .iter()
+            .filter_map(|w| w.key.as_deref())
+            .filter_map(|k| k.strip_prefix("/works/"))
+            .filter_map(|k| popularity.get(k))
+            .copied()
+            .max()
+            .unwrap_or(0);
+        rows.push(Row { pop, isbn13, title, author, cover });
+    }
+    drop(authors);
 
-        sqlx::query("INSERT INTO books (id, isbn13, title, author, cover) VALUES (?, ?, ?, ?, ?)")
-            .bind(next_id)
-            .bind(&isbn13)
-            .bind(&title)
-            .bind(&author)
-            .bind(cover)
-            .execute(&mut *tx)
-            .await?;
+    // Popularity order becomes rowid order — the resolver's ranking. Within a
+    // work (equal pop) cover-bearing editions come first so dedupe keeps them.
+    eprintln!("sorting {} rows…", rows.len());
+    rows.sort_unstable_by(|a, b| b.pop.cmp(&a.pop).then(a.cover.is_none().cmp(&b.cover.is_none())));
+
+    let options = SqliteConnectOptions::new()
+        .filename(out_path)
+        .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Off)
+        .synchronous(SqliteSynchronous::Off);
+    let mut conn = SqliteConnection::connect_with(&options).await?;
+
+    sqlx::raw_sql(
+        "CREATE TABLE books (
+             id      INTEGER PRIMARY KEY,
+             isbn13  TEXT NOT NULL,
+             title   TEXT NOT NULL,
+             author  TEXT,
+             cover   INTEGER,
+             pop     INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE VIRTUAL TABLE books_fts USING fts5(
+             title, author,
+             content = '',
+             tokenize = 'unicode61 remove_diacritics 2',
+             prefix = '2 3'
+         );",
+    )
+    .execute(&mut conn)
+    .await?;
+
+    let mut tx = conn.begin().await?;
+    for (index, row) in rows.iter().enumerate() {
+        let id = index as i64 + 1;
+        sqlx::query(
+            "INSERT INTO books (id, isbn13, title, author, cover, pop) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(&row.isbn13)
+        .bind(&row.title)
+        .bind(&row.author)
+        .bind(row.cover)
+        .bind(row.pop)
+        .execute(&mut *tx)
+        .await?;
         sqlx::query("INSERT INTO books_fts (rowid, title, author) VALUES (?, ?, ?)")
-            .bind(next_id)
-            .bind(&title)
-            .bind(&author)
+            .bind(id)
+            .bind(&row.title)
+            .bind(&row.author)
             .execute(&mut *tx)
             .await?;
-        next_id += 1;
-        kept += 1;
-        if kept.is_multiple_of(100_000) {
+        if (id as u64).is_multiple_of(100_000) {
             tx.commit().await?;
             tx = conn.begin().await?;
         }
@@ -186,6 +247,6 @@ async fn main() -> anyhow::Result<()> {
     sqlx::raw_sql("VACUUM").execute(&mut conn).await?;
     conn.close().await?;
 
-    eprintln!("done: {kept} books from {lines} edition records -> {out_path}");
+    eprintln!("done: {} books from {lines} edition records -> {out_path}", rows.len());
     Ok(())
 }

@@ -15,16 +15,18 @@ DB=books.sqlite
 
 mkdir -p "$DUMPS"
 echo "==> downloading dumps (skipped if already present)"
-for part in authors editions; do
-    [ -f "$DUMPS/$part.txt.gz" ] || \
-        curl -L -o "$DUMPS/$part.txt.gz" \
+for part in authors editions ratings reading-log; do
+    file="$DUMPS/${part/reading-log/readinglog}.txt.gz"
+    [ -f "$file" ] || \
+        curl -L -o "$file" \
             "https://openlibrary.org/data/ol_dump_${part}_latest.txt.gz"
 done
 
 echo "==> building $DB (covers-only keeps it small enough for the droplet)"
 rm -f "$DB"
 cargo run --release --bin build_bookdb -- \
-    "$DUMPS/authors.txt.gz" "$DUMPS/editions.txt.gz" "$DB" --covers-only
+    "$DUMPS/authors.txt.gz" "$DUMPS/editions.txt.gz" "$DB" --covers-only \
+    --pop "$DUMPS/ratings.txt.gz" --pop "$DUMPS/readinglog.txt.gz"
 
 echo "==> shipping to $HOST"
 # Stream into the named volume via a helper container: the app mounts the

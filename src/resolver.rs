@@ -106,7 +106,9 @@ impl SearchDoc {
 
 /// Resolves against a local SQLite database built from the monthly Open
 /// Library dumps (see `src/bin/build_bookdb.rs`), so lookups of known books
-/// never leave the machine.
+/// never leave the machine. The builder writes rows in popularity order
+/// (ratings + reading-log counts), so rowid order *is* the ranking — famous
+/// books surface first with no sorting at query time.
 pub struct DumpResolver {
     pool: sqlx::SqlitePool,
 }
@@ -157,7 +159,7 @@ impl BookResolver for DumpResolver {
     async fn by_isbn(&self, isbn13: &str) -> Result<Option<ResolvedBook>, ResolverError> {
         let row = sqlx::query_as::<_, (String, Option<String>)>(
             "SELECT title, author FROM books WHERE isbn13 = ?
-             ORDER BY cover IS NULL, author IS NULL LIMIT 1",
+             ORDER BY id LIMIT 1",
         )
         .bind(isbn13)
         .fetch_optional(&self.pool)
@@ -176,7 +178,7 @@ impl BookResolver for DumpResolver {
             "SELECT b.isbn13, b.title, b.author
              FROM books_fts f JOIN books b ON b.id = f.rowid
              WHERE books_fts MATCH ?
-             ORDER BY rank, b.cover IS NULL LIMIT 1",
+             ORDER BY f.rowid LIMIT 1",
         )
         .bind(&fts)
         .fetch_optional(&self.pool)
@@ -191,7 +193,7 @@ impl BookResolver for DumpResolver {
             "SELECT b.isbn13, b.title, b.author, b.cover
              FROM books_fts f JOIN books b ON b.id = f.rowid
              WHERE books_fts MATCH ?
-             ORDER BY rank, b.cover IS NULL LIMIT 20",
+             ORDER BY f.rowid LIMIT 20",
         )
         .bind(&fts)
         .fetch_all(&self.pool)
@@ -499,20 +501,23 @@ mod tests {
         sqlx::raw_sql(
             "CREATE TABLE books (
                  id INTEGER PRIMARY KEY, isbn13 TEXT NOT NULL,
-                 title TEXT NOT NULL, author TEXT, cover INTEGER
+                 title TEXT NOT NULL, author TEXT, cover INTEGER,
+                 pop INTEGER NOT NULL DEFAULT 0
              );
              CREATE VIRTUAL TABLE books_fts USING fts5(
                  title, author, content = '',
                  tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
              );
              INSERT INTO books VALUES
-                 (1, '9780134685991', 'Effective Java', 'Joshua Bloch', 111),
-                 (2, '9780306406157', 'The Dispossessed', 'Ursula K. Le Guin', NULL),
-                 (3, '9780439420891', 'The Dispossessed', 'Ursula K. Le Guin', 222);
+                 (1, '9780134685991', 'Effective Java', 'Joshua Bloch', 111, 500),
+                 (2, '9780439420891', 'The Dispossessed', 'Ursula K. Le Guin', 222, 90),
+                 (3, '9780306406157', 'The Dispossessed', 'Ursula K. Le Guin', NULL, 90),
+                 (4, '9781111111113', 'Dispossessed Farmers of the Dust Bowl', NULL, NULL, 0);
              INSERT INTO books_fts (rowid, title, author) VALUES
                  (1, 'Effective Java', 'Joshua Bloch'),
                  (2, 'The Dispossessed', 'Ursula K. Le Guin'),
-                 (3, 'The Dispossessed', 'Ursula K. Le Guin');",
+                 (3, 'The Dispossessed', 'Ursula K. Le Guin'),
+                 (4, 'Dispossessed Farmers of the Dust Bowl', NULL);",
         )
         .execute(&pool)
         .await
@@ -533,14 +538,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dump_search_dedupes_editions_and_prefers_covers() {
+    async fn dump_search_ranks_by_popularity_and_dedupes_editions() {
         let dump = fixture_dump().await;
         let hits = dump.search("dispossessed").await.unwrap();
-        // Two editions of the same work collapse to one suggestion, and the
-        // cover-bearing edition wins.
-        assert_eq!(hits.len(), 1);
+        // Two editions of the popular work collapse into one suggestion (the
+        // cover-bearing one, which the builder writes first), ranked above the
+        // obscure literal match.
+        assert_eq!(hits.len(), 2);
         assert_eq!(hits[0].isbn13, "9780439420891");
         assert_eq!(hits[0].cover_id, Some(222));
+        assert_eq!(hits[1].isbn13, "9781111111113");
     }
 
     #[tokio::test]
