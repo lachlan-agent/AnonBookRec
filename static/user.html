@@ -4,20 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<!--META-->
+
 <title>Recommend a book</title>
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Suggest a Thing">
-<meta property="og:title" content="Recommend a book">
+<meta property="og:title" content="Recommend a thing">
 <meta property="og:description" content="Suggest a book">
 <meta name="twitter:card" content="summary">
-<!--/META-->
+
 <link rel="stylesheet" href="/style.css">
 <script src="/app.js" defer></script>
 </head>
 <body data-page="user">
 <header class="site-header">
-  <a class="wordmark" href="/">Anonymous book recomendations</a>
+  <a class="wordmark" href="/">Anonymous recommendations</a>
 </header>
 
 <main>
@@ -216,7 +216,7 @@
       <p class="owner-hint danger-hint">
         Generating a new key invalidates your current key immediately and signs
         out every other device. Private recommendations stay readable with the
-        new key. The new key is shown exactly once.
+        new key. The new key is shown exactly once. Save it.
       </p>
       <button id="rotate-key" class="button small danger" type="button">
         Generate new key!
@@ -277,7 +277,7 @@
                   placeholder="Add a note (optional): “I think you’ll enjoy this because…”"></textarea>
       </div>
       <div class="confirm-actions">
-        <button id="confirm-submit" class="button primary small" type="button">Recommend this book</button>
+        <button id="confirm-submit" class="button primary small" type="button">Recommend</button>
         <button id="confirm-cancel" class="button small" type="button">Not this one</button>
       </div>
     </div>
@@ -288,7 +288,7 @@
     </div>
     <ol id="rec-list" class="card-list" aria-label="Recommended books"></ol>
     <p id="empty-shelf" class="empty" hidden>
-      Nothing here yet. Recommend the first book.
+      Nothing here yet. Recommend something.
     </p>
   </section>
 
