@@ -851,6 +851,8 @@ async fn card_pages_carry_link_preview_meta() {
 
     assert!(html.contains("Recommend Lachy &lt;script&gt; a book"), "escaped name in meta");
     assert!(html.contains(r#"property="og:url""#));
+    // Instagram/Facebook render a blank card without an image.
+    assert!(html.contains(r#"property="og:image" content="http://test.local/og.png""#));
     assert!(!html.contains("Lachy <script>"), "unescaped name must never appear");
 
     // Hidden pages keep the generic meta on their friend link.

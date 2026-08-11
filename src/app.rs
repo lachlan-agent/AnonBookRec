@@ -24,7 +24,7 @@ fn escape_html(text: &str) -> String {
 
 /// Swap the generic meta block in user.html for a personalized one so link
 /// previews (Instagram, iMessage, Slack…) show whose page it is.
-fn personalize_meta(html: &str, display_name: Option<&str>, url: &str) -> String {
+fn personalize_meta(html: &str, display_name: Option<&str>, base_url: &str, url: &str) -> String {
     let (Some(start), Some(end)) = (html.find("<!--META-->"), html.find("<!--/META-->")) else {
         return html.to_string();
     };
@@ -40,9 +40,14 @@ fn personalize_meta(html: &str, display_name: Option<&str>, url: &str) -> String
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="Suggest this reader their next book — anonymously. No account needed.">
 <meta property="og:url" content="{url}">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="{image}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{image}">
 "#,
         url = escape_html(url),
+        image = escape_html(&format!("{base_url}/og.png")),
     );
     format!("{}{}{}", &html[..start], meta, &html[end..])
 }
@@ -168,6 +173,7 @@ pub fn build_app(state: AppState) -> Router {
                             personalize_meta(
                                 &user_html,
                                 user.display_name.as_deref(),
+                                &state.config.public_base_url,
                                 &format!(
                                     "{}/u/{}",
                                     state.config.public_base_url,
