@@ -47,7 +47,8 @@ fn personalize_meta(html: &str, display_name: Option<&str>, base_url: &str, url:
 <meta name="twitter:image" content="{image}">
 "#,
         url = escape_html(url),
-        image = escape_html(&format!("{base_url}/og.png")),
+        // The ?v= busts Meta's per-URL scrape cache when the card changes.
+        image = escape_html(&format!("{base_url}/og.png?v=2")),
     );
     format!("{}{}{}", &html[..start], meta, &html[end..])
 }
