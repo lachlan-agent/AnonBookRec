@@ -5,3 +5,5 @@
 .pepper
 secret.txt
 .env
+dumps/
+books.sqlite
