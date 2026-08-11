@@ -76,6 +76,7 @@ async fn test_app() -> (Router, SqlitePool) {
         pepper: [42u8; 32],
         rate_limiting: false,
         static_dir: "static".into(),
+        book_db: None,
     };
     let state = AppState {
         pool: pool.clone(),
@@ -867,7 +868,7 @@ async fn card_pages_carry_link_preview_meta() {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let html = String::from_utf8_lossy(&bytes).to_string();
     assert!(!html.contains("Lachy"), "hidden page must not leak the name in meta");
-    assert!(html.contains(r#"og:title" content="Recommend a book""#));
+    assert!(html.contains(r#"og:title" content="Recommend a thing""#));
 }
 
 #[tokio::test]

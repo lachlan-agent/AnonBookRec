@@ -8,6 +8,9 @@ services:
       PUBLIC_BASE_URL: https://${DOMAIN:?set DOMAIN in .env}
       SECURE_COOKIES: "1"
       RUST_LOG: info
+      # Local Open Library dump database (deploy/update-bookdb.sh). If the
+      # file is absent the app just uses the network resolver.
+      BOOK_DB: /data/books.sqlite
     volumes:
       - app-data:/data
     expose:

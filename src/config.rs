@@ -18,6 +18,9 @@ pub struct Config {
     /// Disabled in tests.
     pub rate_limiting: bool,
     pub static_dir: PathBuf,
+    /// Optional local book database built from the Open Library dumps
+    /// (`build_bookdb`). When present, lookups hit it before the network.
+    pub book_db: Option<PathBuf>,
 }
 
 impl Config {
@@ -33,6 +36,7 @@ impl Config {
         let secure_cookies = env_or("SECURE_COOKIES", "0") == "1";
         let pepper = load_pepper()?;
         let static_dir = PathBuf::from(env_or("STATIC_DIR", "static"));
+        let book_db = std::env::var("BOOK_DB").ok().map(PathBuf::from);
         Ok(Config {
             bind,
             database_url,
@@ -41,6 +45,7 @@ impl Config {
             pepper,
             rate_limiting: true,
             static_dir,
+            book_db,
         })
     }
 }
