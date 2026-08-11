@@ -29,10 +29,12 @@ cargo run --release --bin build_bookdb -- \
 echo "==> shipping to $HOST"
 # Stream into the named volume via a helper container: the app mounts the
 # volume at /data and picks the file up on restart.
+# The old file is unlinked first: the droplet lacks disk for two copies, and
+# the running app keeps serving from its open handle until the restart.
 gzip -c "$DB" | ssh "$HOST" '
     set -e
     gunzip -c | docker run --rm -i -v anonbookrec_app-data:/data debian:trixie-slim \
-        sh -c "cat > /data/books.sqlite.new && mv /data/books.sqlite.new /data/books.sqlite && chown 999:999 /data/books.sqlite"
+        sh -c "rm -f /data/books.sqlite && cat > /data/books.sqlite.new && mv /data/books.sqlite.new /data/books.sqlite && chown 999:999 /data/books.sqlite"
     cd /opt/anonbookrec && docker compose restart app
 '
 
